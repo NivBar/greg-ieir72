@@ -2,6 +2,23 @@ import os
 # import datetime
 # import csv
 import subprocess
+import time
+
+def measure_time(func):
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        print(f"Function '{func.__name__}' took:")
+        print(f"Seconds: {elapsed_time:.2f}")
+        print(f"Minutes: {elapsed_time / 60:.2f}")
+        print(f"Hours: {elapsed_time / 3600:.2f}")
+
+        return result
+
+    return wrapper
 
 
 def run_command(command):
@@ -20,7 +37,7 @@ def run_bash_command(command):
     out, err = p.communicate()
     return out
 
-
+@measure_time
 def build_index(filename, currentTime, baseDir):
     """
     Parse the trectext file given, and create an index.
@@ -38,7 +55,7 @@ def build_index(filename, currentTime, baseDir):
     out = run_bash_command(command)
     return INDEX
 
-
+@measure_time
 def merge_indices(asrIndex, baseDir):
     """
     Merge indices of ASR and ClueWeb09. If MergedIndx is exist, it will be deleted.
@@ -53,7 +70,7 @@ def merge_indices(asrIndex, baseDir):
     out = run_bash_command(command)
     return MERGED_INDEX
 
-
+@measure_time
 def run_ranking_model(mergedIndex, workingSet, currentTime, baseDir):
     """
     workingSet - a file in trec format that dictates which population to work on
@@ -104,17 +121,15 @@ def run_ranking_model(mergedIndex, workingSet, currentTime, baseDir):
 
 
 if __name__ == '__main__':
-    # workingSet = '/lv_local/home/niv.b/content_modification_code-master/trecs/trec_file_original_sorted.trectext'
-    workingSet = '/lv_local/home/niv.b/content_modification_code-master/trecs/trec_file_original_sorted_test.trectext'
+    workingSet = '/lv_local/home/niv.b/content_modification_code-master/trecs/working_set.trectext'
     baseDir = '/lv_local/home/niv.b/content_modification_code-master/'
     currentTime = "1"
-    # documents = '/lv_local/home/niv.b/content_modification_code-master/data/documents.trectext'
-    documents = '/lv_local/home/niv.b/content_modification_code-master/data/documents_test.trectext'
+    documents = '/lv_local/home/niv.b/content_modification_code-master/trecs/bot_followup.trectext'
 
-    # asrIndex = build_index(documents, currentTime, baseDir)
-    # print("build_index done...")
-    # mergedIndex = merge_indices(asrIndex, baseDir)
-    mergedIndex = '/lv_local/home/niv.b/content_modification_code-master/Collections/mergedindex'
+    asrIndex = build_index(documents, currentTime, baseDir)
+    print("build_index done...")
+    mergedIndex = merge_indices(asrIndex, baseDir)
+    # mergedIndex = '/lv_local/home/niv.b/content_modification_code-master/Collections/mergedindex'
     print("merge_indices done...")
     res = run_ranking_model(mergedIndex, workingSet, currentTime, baseDir)
     print("run_ranking_model done...")
