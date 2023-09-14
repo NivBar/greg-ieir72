@@ -10,25 +10,28 @@ from vector_functionality import query_term_freq, centroid_similarity, calculate
 from utils import clean_texts, read_trec_file, load_file, get_java_object, create_trectext, create_index, run_model, \
     create_features_file_diff, \
     read_raw_trec_file, create_trec_eval_file, order_trec_file, retrieve_scores, transform_query_text, \
-    read_queries_file, create_index_to_query_dict
+    read_queries_file, create_index_to_query_dict, parse_with_regex
 from nltk import sent_tokenize
 import numpy as np
 import math
 from multiprocessing import cpu_count
 from functools import partial
-import nltk
 
-nltk.download('punkt')
+
+# import nltk
+# nltk.download('punkt')
+# import gensim.downloader as api
+#
+# # This will download and load the model into memory
+# model = api.load("word2vec-google-news-300")
+#
+# # If you want to save the model to a file
+# model.save_word2vec_format('embedding_models/GoogleNews-vectors-negative300.bin', binary=True)
+def custom_split(s):
+    return s.rsplit('_', 2)[0], s.rsplit('_', 2)[1], s.rsplit('_', 2)[2]
 
 
 def create_sentence_pairs(top_docs, ref_doc, texts):
-    """
-    this function creates a dictionary of sentence pairs between the top documents and the reference document
-    :param top_docs: list of top documents
-    :param ref_doc: document to compare to
-    :param texts: texts of all documents
-    :return:
-    """
     result = {}
     ref_sentences = sent_tokenize(texts[ref_doc])
     for doc in top_docs:
@@ -40,17 +43,18 @@ def create_sentence_pairs(top_docs, ref_doc, texts):
     return result
 
 
+# def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", ref_index=-1, top_docs_index=3):
+#     output_file = "raw_ds_out.txt"
+#     with open(output_file, 'w') as output:
+#         for epoch in ranked_lists:
+#             for query in ranked_lists[epoch]:
+#                 top_docs = ranked_lists[epoch][query][:top_docs_index]
+#                 ref_doc = ranked_lists[epoch][query][ref_index]
+#                 pairs = create_sentence_pairs(top_docs, ref_doc, doc_texts)
+#                 for key in pairs:
+#                     output.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs[key] + "\n")
+
 def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", ref_index=-1, top_docs_index=3):
-    """
-    this function creates a raw dataset for the model.
-    :param ranked_lists:
-    :param doc_texts:
-    :param output_file:
-    :param ref_index:
-    :param top_docs_index:
-    :return:
-    """
-    output_file = "raw_ds_out.txt"
     with open(output_file, 'w') as output:
         for epoch in ranked_lists:
             for query in ranked_lists[epoch]:
@@ -61,47 +65,42 @@ def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", re
                     output.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs[key] + "\n")
 
 
+# def read_raw_ds(raw_dataset):
+#     result = {}
+#     with open(raw_dataset, encoding="utf-8") as ds:
+#         for line in ds:
+#             query = line.split("\t")[0]
+#             if query not in result:
+#                 result[query] = {}
+#             key = line.split("\t")[1]
+#             sentence_out = line.split("\t")[2]
+#             sentence_in = line.split("\t")[3].rstrip()
+#             result[query][key] = {"in": sentence_in, "out": sentence_out}
+#     return result
+
 def read_raw_ds(raw_dataset):
-    """
-    this function reads the raw dataset and returns a dictionary of the form: {query: {key: {in: sentence_in, out: sentence_out}}}
-    :param raw_dataset:
-    :return:
-    """
     result = {}
     with open(raw_dataset, encoding="utf-8") as ds:
         for line in ds:
-            query = line.split("\t")[0]
-            if query not in result:
-                result[query] = {}
             key = line.split("\t")[1]
+            query = key.split("-")[2]
+            epoch = key.split("-")[1]
+            comp_id = query + "_" + epoch
+            if comp_id not in result:
+                result[comp_id] = {}
             sentence_out = line.split("\t")[2]
             sentence_in = line.split("\t")[3].rstrip()
-            result[query][key] = {"in": sentence_in, "out": sentence_out}
+            result[comp_id][key] = {"in": sentence_in, "out": sentence_out}
     return result
 
 
 def reverese_query(qid):
-    """
-    this function reverses the query id and returns the epoch and the query
-    :param qid:
-    :return:
-    """
     epoch = str(qid)[-2:]
     query = str(qid)[:-2].zfill(3)
     return epoch, query
 
 
 def context_similarity(replacement_index, ref_sentences, sentence_compared, mode, model, stemmer=None):
-    """
-    this function calculates the similarity between the context of the sentence and the context of the reference sentence. After the similarity is calculated, the function returns the similarity score.
-    :param replacement_index:
-    :param ref_sentences:
-    :param sentence_compared:
-    :param mode:
-    :param model:
-    :param stemmer:
-    :return:
-    """
     if mode == "own":
         ref_sentence = ref_sentences[replacement_index]
         return centroid_similarity(clean_texts(ref_sentence), clean_texts(sentence_compared), model, stemmer)
@@ -120,27 +119,14 @@ def context_similarity(replacement_index, ref_sentences, sentence_compared, mode
 
 
 def get_past_winners(ranked_lists, epoch, query):
-    """
-    this function returns the past winners of a query. The number of past winners is determined by the epoch.
-    :param ranked_lists:
-    :param epoch:
-    :param query:
-    :return:
-    """
     past_winners = []
     for iteration in range(int(epoch)):
-        current_epoch = str(iteration + 1).zfill(2)
+        current_epoch = "0" + str(iteration + 1)
         past_winners.append(ranked_lists[current_epoch][query][0])
     return past_winners
 
 
 def create_weighted_dict(dict, weight):
-    """
-    this function creates a weighted dictionary of the form: {token: weight}
-    :param dict:
-    :param weight:
-    :return:
-    """
     result = {}
     for token in dict:
         result[token] = float(dict[token]) * weight
@@ -148,12 +134,6 @@ def create_weighted_dict(dict, weight):
 
 
 def get_past_winners_tfidf_centroid(past_winners, docuemnt_vectors_dir):
-    """
-    this function creates a centroid of the past winners of a query. The centroid is calculated by the tfidf vectors of the documents.
-    :param past_winners:
-    :param docuemnt_vectors_dir:
-    :return:
-    """
     result = {}
     decay_factors = [0.01 * math.exp(-0.01 * (len(past_winners) - i)) for i in range(len(past_winners))]
     denominator = sum(decay_factors)
@@ -166,14 +146,6 @@ def get_past_winners_tfidf_centroid(past_winners, docuemnt_vectors_dir):
 
 
 def past_winners_centroid(past_winners, texts, model, stemmer=None):
-    """
-    this function creates a centroid of the past winners of a query. The centroid is calculated by the word2vec vectors of the documents.
-    :param past_winners:
-    :param texts:
-    :param model:
-    :param stemmer:
-    :return:
-    """
     sum_vector = None
     decay_factors = [0.01 * math.exp(-0.01 * (len(past_winners) - i)) for i in range(len(past_winners))]
     denominator = sum(decay_factors)
@@ -187,15 +159,6 @@ def past_winners_centroid(past_winners, texts, model, stemmer=None):
 
 
 def write_files(feature_list, feature_vals, output_dir, qid, ref):
-    """
-    this function writes the feature values to a file. The file name is determined by the query id and the reference sentence.
-    :param feature_list:
-    :param feature_vals:
-    :param output_dir:
-    :param qid:
-    :param ref:
-    :return:
-    """
     epoch, query = reverese_query(qid)
     ind_name = {-1: "5", 1: "2"}
     query_write = query + str(int(epoch)) + ind_name[ref]
@@ -210,11 +173,6 @@ def write_files(feature_list, feature_vals, output_dir, qid, ref):
 
 def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_index, doc_tfidf_vectors_dir,
                     tfidf_sentence_dir, queries, output_dir, qid):
-    """
-    this function creates the features for a query. The features are written to a file. The file name is determined by the query id and the reference sentence.
-
-    :return: a dictionary of the form: {feature: {pair: value}}
-    """
     global word_embd_model
     feature_vals = {}
     relevant_pairs = raw_ds[qid]
@@ -227,8 +185,8 @@ def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_inde
     for feature in feature_list:
         feature_vals[feature] = {}
 
-    epoch, qid_original = reverese_query(qid)
-    if epoch not in ["04", "06"]:
+    qid_original, epoch  = qid.split("_")
+    if epoch in ["01"]:
         return
     past_winners = get_past_winners(ranked_lists, epoch, qid_original)
     past_winners_semantic_centroid_vector = past_winners_centroid(past_winners, doc_texts, word_embd_model, True)
@@ -243,7 +201,7 @@ def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_inde
         in_vec = get_text_centroid(clean_texts(sentence_in), word_embd_model, True)
         out_vec = get_text_centroid(clean_texts(sentence_out), word_embd_model, True)
         replace_index = int(pair.split("_")[1])
-        query = queries[qid]
+        query = queries[qid_original]
 
         feature_vals['FractionOfQueryWordsIn'][pair] = query_term_freq("avg", clean_texts(sentence_in),
                                                                        clean_texts(query))
@@ -282,21 +240,6 @@ def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_inde
 def feature_creation_parallel(raw_dataset_file, ranked_lists, doc_texts, top_doc_index, ref_doc_index,
                               doc_tfidf_vectors_dir, tfidf_sentence_dir, queries, output_feature_files_dir,
                               output_final_features_dir, workingset_file):
-    """
-    this function creates the features for the relevant pairs. the features are written to files in the output_dir directory.
-    :param raw_dataset_file:
-    :param ranked_lists:
-    :param doc_texts:
-    :param top_doc_index:
-    :param ref_doc_index:
-    :param doc_tfidf_vectors_dir:
-    :param tfidf_sentence_dir:
-    :param queries:
-    :param output_feature_files_dir:
-    :param output_final_features_dir:
-    :param workingset_file:
-    :return:
-    """
     global word_embd_model
     args = [qid for qid in queries]
     if not os.path.exists(output_feature_files_dir):
@@ -304,24 +247,27 @@ def feature_creation_parallel(raw_dataset_file, ranked_lists, doc_texts, top_doc
     if not os.path.exists(output_final_features_dir):
         os.makedirs(output_final_features_dir)
     raw_ds = read_raw_ds(raw_dataset_file)
+
+    new_args = []
+    for qid in queries.keys():
+        for epoch in ranked_lists.keys():
+            # create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_index, doc_tfidf_vectors_dir,
+            #                 tfidf_sentence_dir, queries, output_feature_files_dir, qid + "_" + epoch)
+            if qid + "_" + epoch in raw_ds.keys():
+                new_args.append(qid + "_" + epoch)
+
     create_ws(raw_ds, workingset_file, ref_doc_index)
     func = partial(create_features, raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_index,
                    doc_tfidf_vectors_dir, tfidf_sentence_dir, queries, output_feature_files_dir)
     workers = cpu_count() - 1
-    list_multiprocessing(args, func, workers=workers)
+    list_multiprocessing(new_args, func, workers=workers)
+
     command = "perl scripts/generateSentences.pl " + output_feature_files_dir + " " + workingset_file
     run_bash_command(command)
     run_bash_command("mv features " + output_final_features_dir)
 
 
 def run_svm_rank_model(test_file, model_file, predictions_folder):
-    """
-    this function runs the svm rank model on the test file and writes the predictions to the predictions folder.
-    :param test_file:
-    :param model_file:
-    :param predictions_folder:
-    :return:
-    """
     if not os.path.exists(predictions_folder):
         os.makedirs(predictions_folder)
     predictions_file = predictions_folder + os.path.basename(model_file)
@@ -333,11 +279,6 @@ def run_svm_rank_model(test_file, model_file, predictions_folder):
 
 
 def create_index_to_doc_name_dict(features):
-    """
-    this function creates a dictionary that maps between the index of the document in the features file to the document name.
-    :param features:
-    :return:
-    """
     doc_name_index = {}
     index = 0
     with open(features) as ds:
@@ -380,13 +321,14 @@ def create_ws(raw_ds, ws_fname, ref):
     with open(ws_fname, 'w') as ws:
         for qid in raw_ds:
             epoch, query = reverese_query(qid)
-            if epoch not in ["04", "06"]:
-                continue
-            query_write = query + str(int(epoch)) + ind_name[ref]
+            # if epoch not in ["04", "06"]:
+            #     continue
+            query_write = query + str(int(epoch.replace("_",""))) + ind_name[ref]
             for i, pair in enumerate(raw_ds[qid]):
-                out_ = str(int(pair.split("_")[1]) + 1)
-                in_ = str(int(pair.split("_")[2]) + 1)
-                name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
+                pair_split = custom_split(pair)
+                out_ = str(int(pair_split[1]) + 1)
+                in_ = str(int(pair_split[2]) + 1)
+                name = custom_split(pair.split("$")[1])[0] + "_" + in_ + "_" + out_
                 ws.write(query_write + " Q0 " + name + " 0 " + str(i + 1) + " pairs_seo\n")
 
 
@@ -401,18 +343,22 @@ def create_new_trectext(doc, texts, new_text, new_trectext_name):
     text_copy[doc] = new_text
     create_trectext(text_copy, new_trectext_name, "ws_debug")
 
+def qid_matching(comp_id):
+    qid, epoch =  comp_id.split("_")
+    return str(int(qid)*100 + int(epoch))
 
-def create_specifi_ws(qid, ranked_lists, fname):
+def create_specifi_ws(qid, ranked_, fname):
+    new_quid = qid_matching(qid)
     with open(fname, 'w') as out:
-        for i, doc in enumerate(ranked_lists[qid]):
-            out.write(qid + " Q0 " + doc + " 0 " + str(i + 1) + " pairs_seo\n")
+        for i, doc in enumerate(ranked_):
+            out.write(new_quid + " Q0 " + doc + " 0 " + str(i + 1) + " pairs_seo\n")
 
 
-def run_reranking(new_index, sentence_in, qid, specific_ws, ref_doc, out_index, texts, new_trectext_name, ranked_lists,
+def run_reranking(new_index, sentence_in, qid, specific_ws, ref_doc, out_index, texts, new_trectext_name, ranked_,
                   new_feature_file, feature_dir, trec_file, score_file, options):
     new_text = update_text_doc(texts[ref_doc], sentence_in, out_index)
     create_new_trectext(ref_doc, texts, new_text, new_trectext_name)
-    create_specifi_ws(qid, ranked_lists, specific_ws)
+    create_specifi_ws(qid, ranked_, specific_ws)
     logger.info("creating features")
     create_index(new_trectext_name, os.path.dirname(new_index), os.path.basename(new_index),
                  options.home_path, options.indri_path)
@@ -442,9 +388,11 @@ def run_reranking(new_index, sentence_in, qid, specific_ws, ref_doc, out_index, 
 
 
 def create_qrels(raw_ds, base_trec, out_file, ref, new_indices_dir, texts, options):
-    ind_name = {-1: "5", 1: "2"}
+    idx_dict = {-1: 5, -2: 4, -3: 3, -4: 2, -5: 1}
+    ref_str = str(ref) if ref > 0 else str(idx_dict.get(ref, None))
     with open(out_file, 'w') as qrels:
-        ranked_lists = read_raw_trec_file(base_trec)
+        # ranked_lists = read_raw_trec_file(base_trec)
+        ranked_lists = read_trec_file(base_trec)
         raw_stats = read_raw_ds(raw_ds)
         ws_dir = "tmp_ws/"
         if not os.path.exists(ws_dir):
@@ -458,32 +406,27 @@ def create_qrels(raw_ds, base_trec, out_file, ref, new_indices_dir, texts, optio
         scores_dir = "tmp_scores/"
         if not os.path.exists(scores_dir):
             os.makedirs(scores_dir)
-        for qid in raw_stats:
-            epoch, q = reverese_query(qid)
-
-            """ Change FOR GENERIC porpuses if needed"""
-            # if epoch not in ["04", "06"]:
-            #     continue
-
-            for pair in raw_stats[qid]:
+        for comp_id in raw_stats:
+            for pair in raw_stats[comp_id]:
                 ref_doc = pair.split("$")[0]
                 out_index = int(pair.split("_")[1])
-                epoch, query = reverese_query(qid)
-                query_write = query + str(int(epoch)) + ind_name[ref]
-                out_ = str(int(pair.split("_")[1]) + 1)
-                in_ = str(int(pair.split("_")[2]) + 1)
-                name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
+                query, epoch = comp_id.split("_")
+                ranked_ = ranked_lists[epoch][query]
+                query_write = query + str(int(epoch)) + ref_str
+                out_ = str(int(custom_split(pair)[1]) + 1)
+                in_ = str(int(custom_split(pair)[2]) + 1)
+                name = custom_split(pair.split("$")[1])[0] + "_" + in_ + "_" + out_
                 fname_pair = pair.replace("$", "_")
                 feature_dir = "tmp_features/" + fname_pair + "/"
                 if not os.path.exists(feature_dir):
                     os.makedirs(feature_dir)
                 features_file = "qrels_features/" + fname_pair
-                final_trec = run_reranking(new_indices_dir + fname_pair, raw_stats[qid][pair]["in"], qid,
+                final_trec = run_reranking(new_indices_dir + fname_pair, raw_stats[comp_id][pair]["in"], comp_id,
                                            ws_dir + fname_pair, ref_doc, out_index, texts, trectext_dir + fname_pair,
-                                           ranked_lists, features_file, feature_dir, trec_dir + fname_pair,
+                                           ranked_, features_file, feature_dir, trec_dir + fname_pair,
                                            scores_dir + fname_pair, options)
                 new_lists = read_raw_trec_file(final_trec)
-                label = str(max(ranked_lists[qid].index(ref_doc) - new_lists[qid].index(ref_doc), 0))
+                label = str(max(ranked_lists[epoch][query].index(ref_doc) - new_lists[comp_id.replace("0","").replace("_","0")].index(ref_doc), 0))
                 qrels.write(query_write + " 0 " + name + " " + label + "\n")
 
 
@@ -496,37 +439,42 @@ if __name__ == "__main__":
     logger.info("running %s" % ' '.join(sys.argv))
     parser = OptionParser()
 
-    parser.add_option("--mode", dest="mode", default="qrels")
-    parser.add_option("--index_path", dest="index_path", default="../INDEX/index")
-    parser.add_option("--raw_ds_out", dest="raw_ds_out", default="raw_ds_out.txt")
-    parser.add_option("--ref_index", dest="ref_index", default="-1")
+    parser.add_option("--mode", dest="mode", default="features")
+    parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/cluewebindex')
+    parser.add_option("--raw_ds_out", dest="raw_ds_out", default="./greg_output/raw_ds_out.txt")
+    parser.add_option("--ref_index", dest="ref_index",
+                      default="1")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
     parser.add_option("--top_docs_index", dest="top_docs_index", default="3")
     parser.add_option("--home_path", dest="home_path", default="./")
     parser.add_option("--jar_path", dest="jar_path", default="./scripts/RankLib.jar")
     parser.add_option("--java_path", dest="java_path", default="../opt/java/jdk1.8.0")
-    parser.add_option("--swig_path", dest="swig_path", default = "../indri-5.6/swig/src/java")
+    parser.add_option("--swig_path", dest="swig_path", default="../indri-5.6/swig/src/java")  # ???
     parser.add_option("--stopwords_file", dest="stopwords_file", default="data/stopwords_list")
     parser.add_option("--queries_text_file", dest="queries_text_file", default="./data/working_comp_queries.txt")
     parser.add_option("--scripts_path", dest="scripts_path", default="scripts/")
     parser.add_option("--model", dest="model", default="./rank_models/model_lambdatamart")
-    parser.add_option("--indri_path", dest="indri_path", default="./indri")
-    parser.add_option("--doc_tfidf_dir", dest="doc_tfidf_dir")
-    parser.add_option("--sentences_tfidf_dir", dest="sentences_tfidf_dir")
-    parser.add_option("--queries_file", dest="queries_file", default="data/queries_seo_exp.xml")
-    parser.add_option("--scores_dir", dest="scores_dir")
-    parser.add_option("--trec_file", dest="trec_file", default="trecs/trec_file_original_sorted.txt")
-    parser.add_option("--sentence_trec_file", dest="sentence_trec_file")
-    parser.add_option("--output_feature_files_dir", dest="output_feature_files_dir")
-    parser.add_option("--output_final_feature_file_dir", dest="output_final_feature_file_dir")
-    parser.add_option("--trectext_file", dest="trectext_file", default="data/documents.trectext")
+    parser.add_option("--indri_path", dest="indri_path", default="../indri")
+    parser.add_option("--doc_tfidf_dir", dest="doc_tfidf_dir", default="./asr_tfidf_vectors/")
+    parser.add_option("--sentences_tfidf_dir", dest="sentences_tfidf_dir", default="./greg_output/sentences_tfidf_dir/")
+    parser.add_option("--queries_file", dest="queries_file", default="data/queries_bot.xml")
+    parser.add_option("--scores_dir", dest="scores_dir", default="./greg_output/scores_dir")
+    parser.add_option("--trec_file", dest="trec_file", default="./trecs/trec_file_original_sorted.txt")
+    # parser.add_option("--sentence_trec_file", dest="sentence_trec_file") #not used
+    parser.add_option("--output_feature_files_dir", dest="output_feature_files_dir",
+                      default="./greg_output/output_feature_files_dir")
+    parser.add_option("--output_final_feature_file_dir", dest="output_final_feature_file_dir",
+                      default="./greg_output/output_final_feature_file_dir")
+    parser.add_option("--trectext_file", dest="trectext_file", default="./data/documents.trectext")
     parser.add_option("--new_trectext_file", dest="new_trectext_file")
-    parser.add_option("--embedding_model_file", dest="model_file")
-    parser.add_option("--workingset_file", dest="workingset_file")
-    parser.add_option("--svm_model_file", dest="svm_model_file")
+    parser.add_option("--embedding_model_file", dest="embedding_model_file",
+                      default="./embedding_models/GoogleNews-vectors-negative300.bin")
+    parser.add_option("--workingset_file", dest="workingset_file", default = "./greg_output/working_set_test.trectext")
+    parser.add_option("--svm_model_file", dest="svm_model_file", default="./rank_models/harmonic_competition_model")
     (options, args) = parser.parse_args()
 
     ranked_lists = read_trec_file(options.trec_file)
-    doc_texts = load_file(options.trectext_file)
+    # doc_texts = load_file(options.trectext_file)
+    doc_texts = parse_with_regex(open(options.trectext_file, 'r').read())
     mode = options.mode
 
     if mode == "qrels":
@@ -537,6 +485,9 @@ if __name__ == "__main__":
         create_qrels(options.raw_ds_out, options.trec_file, "qrels_seo_bot" + options.ref_index + ".txt",
                      int(options.ref_index), "qrels_indices/", doc_texts, options)
     if mode == "features":
+        # delete below line when debugging stops
+
+        run_bash_command('rm -r ' + options.raw_ds_out)
         if not os.path.exists(options.raw_ds_out):
             create_raw_dataset(ranked_lists, doc_texts, options.raw_ds_out, int(options.ref_index),
                                int(options.top_docs_index))

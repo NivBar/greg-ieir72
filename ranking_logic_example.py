@@ -3,6 +3,8 @@ import os
 # import csv
 import subprocess
 import time
+import multiprocessing
+
 
 def measure_time(func):
     def wrapper(*args, **kwargs):
@@ -37,6 +39,7 @@ def run_bash_command(command):
     out, err = p.communicate()
     return out
 
+
 @measure_time
 def build_index(filename, currentTime, baseDir):
     """
@@ -45,30 +48,35 @@ def build_index(filename, currentTime, baseDir):
     pathToFolder = baseDir + 'Collections/IndriIndices/'
     if not os.path.exists(pathToFolder):
         os.makedirs(pathToFolder)
+
     INDRI_BUILD_INDEX = '/lv_local/home/niv.b/indri/bin/IndriBuildIndex'
     CORPUS_PATH = filename
     CORPUS_CLASS = 'trectext'
     MEMORY = '1G'
     INDEX = pathToFolder + currentTime
     STEMMER = 'krovetz'
+    if os.path.exists(INDEX):
+        run_bash_command('rm -r ' + INDEX)
     command = INDRI_BUILD_INDEX + ' -corpus.path=' + CORPUS_PATH + ' -corpus.class=' + CORPUS_CLASS + ' -index=' + INDEX + ' -memory=' + MEMORY + ' -stemmer.name=' + STEMMER
     out = run_bash_command(command)
     return INDEX
 
+
 @measure_time
-def merge_indices(asrIndex, baseDir):
+def merge_indices(asrIndex, baseDir, currentTime):
     """
-    Merge indices of ASR and ClueWeb09. If MergedIndx is exist, it will be deleted.
+    Merge indices of ASR and ClueWeb09. If MergedIndx exists, it will be deleted.
     """
 
     INDRI_DUMP_INDEX = '/lv_local/home/niv.b/indri/bin/dumpindex'
-    CLUEWEB = '/lv_local/home/niv.b/cluewebindex'
+    CLUEWEB = f'/lv_local/home/niv.b/cluewebindex'
     pathToFolder = baseDir + 'Collections/'
-    MERGED_INDEX = pathToFolder + '/mergedindex'
+    MERGED_INDEX = pathToFolder + f'/mergedindex_{currentTime}'
     run_bash_command('rm -r ' + MERGED_INDEX)
     command = INDRI_DUMP_INDEX + ' ' + MERGED_INDEX + ' merge ' + CLUEWEB + ' ' + asrIndex
     out = run_bash_command(command)
     return MERGED_INDEX
+
 
 @measure_time
 def run_ranking_model(mergedIndex, workingSet, currentTime, baseDir):
@@ -120,20 +128,43 @@ def run_ranking_model(mergedIndex, workingSet, currentTime, baseDir):
     return RANKED_LIST_DIR + '/LambdaMART' + currentTime
 
 
-if __name__ == '__main__':
-    workingSet = '/lv_local/home/niv.b/content_modification_code-master/trecs/working_set.trectext'
+# if __name__ == '__main__':
+#     workingSet = '/lv_local/home/niv.b/content_modification_code-master/trecs/working_set.trectext'
+#     baseDir = '/lv_local/home/niv.b/content_modification_code-master/'
+#     currentTime = "1"
+#     documents = '/lv_local/home/niv.b/content_modification_code-master/trecs/bot_followup.trectext'
+#
+#     asrIndex = build_index(documents, currentTime, baseDir)
+#     print("build_index done...")
+#     mergedIndex = merge_indices(asrIndex, baseDir)
+#     # mergedIndex = '/lv_local/home/niv.b/content_modification_code-master/Collections/mergedindex'
+#     print("merge_indices done...")
+#     res = run_ranking_model(mergedIndex, workingSet, currentTime, baseDir)
+#     print("run_ranking_model done...")
+#     print(res)
+#
+#     # res = run_ranking_model('/lv_local/home/niv.b/cluewebindex', workingSet, currentTime, baseDir)
+#     x = 1
+
+def main_task(currentTime):
     baseDir = '/lv_local/home/niv.b/content_modification_code-master/'
-    currentTime = "1"
-    documents = '/lv_local/home/niv.b/content_modification_code-master/trecs/bot_followup.trectext'
+    documents = f'/lv_local/home/niv.b/content_modification_code-master/trecs/bot_followup_{currentTime}.trectext'
+    workingSet = f'/lv_local/home/niv.b/content_modification_code-master/trecs/working_set_{currentTime}.trectext'
 
     asrIndex = build_index(documents, currentTime, baseDir)
     print("build_index done...")
-    mergedIndex = merge_indices(asrIndex, baseDir)
-    # mergedIndex = '/lv_local/home/niv.b/content_modification_code-master/Collections/mergedindex'
+    mergedIndex = merge_indices(asrIndex, baseDir, currentTime)
     print("merge_indices done...")
+
     res = run_ranking_model(mergedIndex, workingSet, currentTime, baseDir)
     print("run_ranking_model done...")
     print(res)
 
-    # res = run_ranking_model('/lv_local/home/niv.b/cluewebindex', workingSet, currentTime, baseDir)
-    x = 1
+if __name__ == '__main__':
+    num_cores = multiprocessing.cpu_count()
+    pool = multiprocessing.Pool(processes=num_cores)
+    current_times = ["6"]
+    print(f"running {current_times[0]} model...")
+    pool.map(main_task, current_times)
+    pool.close()
+    pool.join()

@@ -1,28 +1,28 @@
 import os
-import re
 import javaobj
+import pandas as pd
 
 from gen_utils import run_bash_command, run_command
 import xml.etree.ElementTree as ET
 from lxml import etree
+import re
 
 
 def create_features_file_diff(features_dir, base_index_path, new_index_path, new_features_file, working_set_file,
                               scripts_path, java_path, swig_path, stopwords_file, queries_text_file, home_path):
-    """
-    Creates  a feature file via a given index and a given working set file
-    this function is used to create a feature file for a new index, based on a base index
-    """
     run_bash_command("rm -r " + features_dir)
     if not os.path.exists(features_dir):
         os.makedirs(features_dir)
     if not os.path.exists(os.path.dirname(new_features_file)):
         os.makedirs(os.path.dirname(new_features_file))
-    # command = home_path + java_path + "/bin/java -Djava.library.path=" + swig_path + " -cp seo_indri_utils.jar LTRFeatures " + base_index_path + " " + new_index_path + " " + stopwords_file + " " + queries_text_file + " " + working_set_file + " " + features_dir
-    command = java_path + "/bin/java -Djava.library.path=" + swig_path \
-              + " -cp seo_indri_utils.jar LTRFeatures " + base_index_path \
-              + " " + new_index_path + " " + stopwords_file + " " \
-              + queries_text_file + " " + working_set_file + " " + features_dir
+    command = home_path + java_path + "/bin/java -Djava.library.path=" + swig_path + \
+              " -cp seo_indri_utils.jar LTRFeatures " + base_index_path + " ./" + new_index_path + " " + \
+              stopwords_file + " " + queries_text_file + " " + working_set_file + " " + features_dir
+    # command = f"./scripts/LTRFeatures {base_index_path} {'./'+new_index_path} {stopwords_file} {queries_text_file} " \
+    #           f"{working_set_file} {features_dir}"
+
+    # command = f'./scripts/LTRFeatures ' + queries_text_file + f' -stream=doc -index=' + './'+new_index_path + f' -repository=' + \
+    #           './'+new_index_path + f' -useWorkingSet=true -workingSetFile=' + working_set_file + ' -workingSetFormat=trec'
 
     print(command)
     out = run_bash_command(command)
@@ -39,32 +39,37 @@ def create_features_file_diff(features_dir, base_index_path, new_index_path, new
     return new_features_file
 
 
+# def read_trec_file(trec_file):
+#     stats = {}
+#     with open(trec_file) as file:
+#         for line in file:
+#             doc = line.split()[2]
+#             epoch = doc.split("-")[1]
+#             query = doc.split("-")[2]
+#             if epoch not in stats:
+#                 stats[epoch]={}
+#             if query not in stats[epoch]:
+#                 stats[epoch][query]=[]
+#             stats[epoch][query].append(doc)
+#     return stats
+
 def read_trec_file(trec_file):
-    """
-    this function reads a trec file and returns a dictionary of the form {epoch:{query:[doc1,doc2,...]}}
-    :param trec_file:
-    :return:
-    """
     stats = {}
     with open(trec_file) as file:
-        for line in file:
-            doc = line.split()[2]
+        df = pd.read_csv(file, delimiter=" ", names=["id", "Q0", "docno", "0", "score", "name"])
+        for idx, row in df.iterrows():
+            doc = row.docno
             epoch = doc.split("-")[1]
             query = doc.split("-")[2]
             if epoch not in stats:
-                stats[epoch] = {}
+                stats[epoch]={}
             if query not in stats[epoch]:
-                stats[epoch][query] = []
+                stats[epoch][query]=[]
             stats[epoch][query].append(doc)
     return stats
 
 
 def read_raw_trec_file(trec_file):
-    """
-    this function reads a trec file and returns a dictionary of the form {query:[doc1,doc2,...]}
-    :param trec_file:
-    :return:
-    """
     stats = {}
     with open(trec_file) as file:
         for line in file:
@@ -77,10 +82,6 @@ def read_raw_trec_file(trec_file):
 
 
 def create_trectext(document_text, trec_text_name, working_set_name):
-    """
-    creates trectext document from a given text file
-    this function is used to create a trectext file for a new index, based on a base index
-    """
     f = open(trec_text_name, "w", encoding="utf-8")
     query_to_docs = {}
     for document in document_text:
@@ -110,10 +111,6 @@ def create_trectext(document_text, trec_text_name, working_set_name):
 
 
 def create_index(trec_text_file, index_path, new_index_name, home_path='/home/greg/', indri_path="indri_test"):
-    """
-    Parse the trectext file given, and create an index.
-    this function is used to create an index for a new index, based on a base index
-    """
     indri_build_index = home_path + '/' + indri_path + '/bin/IndriBuildIndex'
     corpus_path = trec_text_file
     corpus_class = 'trectext'
@@ -132,10 +129,6 @@ def create_index(trec_text_file, index_path, new_index_name, home_path='/home/gr
 
 
 def merge_indices(merged_index, new_index_name, base_index, home_path='/home/greg/', indri_path="indri_test"):
-    """
-    merges two different indri indices into one
-    this function is used to create an index for a new index, based on a base index
-    """
     # new_index_name = home_path +'/' + index_path +'/' + new_index_name
     if not os.path.exists(os.path.dirname(merged_index)):
         os.makedirs(os.path.dirname(merged_index))
@@ -147,12 +140,6 @@ def merge_indices(merged_index, new_index_name, base_index, home_path='/home/gre
 
 
 def create_trec_eval_file(results, trec_file):
-    """
-    this function creates a trec file from a given dictionary of the form {query:{doc:score}}
-    :param results:
-    :param trec_file:
-    :return:
-    """
     if not os.path.exists(os.path.dirname(trec_file)):
         os.makedirs(os.path.dirname(trec_file))
     trec_file_access = open(trec_file, 'w')
@@ -164,11 +151,6 @@ def create_trec_eval_file(results, trec_file):
 
 
 def order_trec_file(trec_file):
-    """
-    this function orders a trec file by the query number and the score
-    :param trec_file:
-    :return:
-    """
     final = trec_file.replace(".txt", "")
     final += "_sorted.txt"
     command = "sort -k1,1n -k5nr -k2,1 " + trec_file + " > " + final
@@ -178,13 +160,6 @@ def order_trec_file(trec_file):
 
 
 def retrieve_scores(test_indices, queries, score_file):
-    """
-    this function retrieves the scores from a given score file. the score file is a trec file.
-    :param test_indices:
-    :param queries:
-    :param score_file:
-    :return:
-    """
     results = {}
     with open(score_file) as scores:
         for i, score in enumerate(scores):
@@ -197,11 +172,6 @@ def retrieve_scores(test_indices, queries, score_file):
 
 
 def create_index_to_doc_name_dict(data_set_file):
-    """
-    this function creates a dictionary of the form {index:doc_name} from a given data set file.
-    :param data_set_file:
-    :return:
-    """
     doc_name_index = {}
     index = 0
     with open(data_set_file) as ds:
@@ -214,11 +184,6 @@ def create_index_to_doc_name_dict(data_set_file):
 
 
 def create_index_to_query_dict(data_set_file):
-    """
-    this function creates a dictionary of the form {index:query} from a given data set file.
-    :param data_set_file:
-    :return:
-    """
     query_index = {}
     index = 0
     with open(data_set_file) as ds:
@@ -231,16 +196,6 @@ def create_index_to_query_dict(data_set_file):
 
 
 def run_model(test_file, home_path, java_path, jar_path, score_file, model_path):
-    """
-    this function runs the model on a given test file. the model is a jar file. it returns the score file which is a trec file.
-    :param test_file:
-    :param home_path:
-    :param java_path:
-    :param jar_path:
-    :param score_file:
-    :param model_path:
-    :return:
-    """
     full_java_path = home_path + "/" + java_path + "/bin/java"
     if not os.path.exists(os.path.dirname(score_file)):
         os.makedirs(os.path.dirname(score_file))
@@ -253,13 +208,6 @@ def run_model(test_file, home_path, java_path, jar_path, score_file, model_path)
 
 
 def get_past_winners(ranked_lists, epoch, query):
-    """
-    this function returns the past winners of a given query.
-    :param ranked_lists:
-    :param epoch:
-    :param query:
-    :return:
-    """
     past_winners = []
     for iteration in range(int(epoch)):
         current_epoch = str(iteration + 1).zfill(2)
@@ -268,22 +216,12 @@ def get_past_winners(ranked_lists, epoch, query):
 
 
 def reverese_query(qid):
-    """
-    this function reverses a given query.
-    :param qid:
-    :return:
-    """
     epoch = str(qid)[-2:]
     query = str(qid)[:-2].zfill(3)
     return epoch, query
 
 
 def load_file(filename):
-    """
-    this function loads a given file.
-    :param filename:
-    :return:
-    """
     parser = etree.XMLParser(recover=True)
     tree = ET.parse(filename, parser=parser)
     root = tree.getroot()
@@ -298,23 +236,36 @@ def load_file(filename):
     return docs
 
 
+def parse_with_regex(content):
+    doc_pattern = re.compile(r'<DOC>(.*?)</DOC>', re.DOTALL)
+    docno_pattern = re.compile(r'<DOCNO>(.*?)</DOCNO>', re.DOTALL)
+    text_pattern = re.compile(r'<TEXT>(.*?)</TEXT>', re.DOTALL)
+
+    docs = {}
+    for doc_chunk in doc_pattern.findall(content):
+        docno = docno_pattern.search(doc_chunk)
+        text = text_pattern.search(doc_chunk)
+
+        if docno and text:
+            docno_content = docno.group(1).strip()
+            text_content = text.group(1).strip()
+            docs[docno_content] = text_content
+
+    return docs
+
+
+# def get_java_object(obj_file):
+#     with open(obj_file, 'rb') as fd:
+#         obj = javaobj.load(fd)
+#         return obj
+
 def get_java_object(obj_file):
-    """
-    this function loads a java object from a given file. it uses the javaobj library.
-    :param obj_file:
-    :return:
-    """
     with open(obj_file, 'rb') as fd:
-        obj = javaobj.load(fd)
-        return obj
+        obj = javaobj.loads(fd.read())
+    return obj
 
 
 def clean_texts(text):
-    """
-    this function cleans a given text. it removes all the special characters.
-    :param text:
-    :return:
-    """
     text = text.replace(".", " ")
     text = text.replace("-", " ")
     text = text.replace(",", " ")
@@ -351,11 +302,6 @@ def clean_texts(text):
 
 
 def transform_query_text(queries_raw_text):
-    """
-    this function transforms a given query text to a form that can be used by the model.
-    :param queries_raw_text:
-    :return:
-    """
     transformed = {}
     for qid in queries_raw_text:
         transformed[qid] = queries_raw_text[qid].replace("#combine( ", "").replace(" )", "")
@@ -363,11 +309,6 @@ def transform_query_text(queries_raw_text):
 
 
 def read_queries_file(queries_file):
-    """
-    this function reads a given queries file and returns a dictionary of the form {qid:query_text}
-    :param queries_file:
-    :return:
-    """
     last_number_state = None
     stats = {}
     with open(queries_file) as file:
