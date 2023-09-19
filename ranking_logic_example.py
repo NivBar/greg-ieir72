@@ -163,7 +163,7 @@ def main_task(currentTime):
 if __name__ == '__main__':
     num_cores = multiprocessing.cpu_count()
     pool = multiprocessing.Pool(processes=num_cores)
-    current_times = ["6"]
+    current_times = ["7"]
     print(f"running {current_times[0]} model...")
     pool.map(main_task, current_times)
     pool.close()

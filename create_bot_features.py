@@ -163,12 +163,13 @@ def write_files(feature_list, feature_vals, output_dir, qid, ref):
     ind_name = {-1: "5", 1: "2"}
     query_write = query + str(int(epoch)) + ind_name[ref]
     for feature in feature_list:
-        with open(output_dir + "doc" + feature + "_" + query_write, 'w') as out:
+        with open(output_dir + "/doc_" + feature + "_" + query_write, 'w') as out:
             for pair in feature_vals[feature]:
-                out_ = str(int(pair.split("_")[1]) + 1)
-                in_ = str(int(pair.split("_")[2]) + 1)
-                name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
-                out.write(name + " " + str(feature_vals[feature][pair]) + "\n")
+                # out_ = str(int(pair.split("_")[1]) + 1)
+                # in_ = str(int(pair.split("_")[2]) + 1)
+                # name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
+                # out.write(name + " " + str(feature_vals[feature][pair]) + "\n")
+                out.write(pair + " " + str(feature_vals[feature][pair]) + "\n")
 
 
 def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_index, doc_tfidf_vectors_dir,
@@ -456,7 +457,7 @@ if __name__ == "__main__":
     parser.add_option("--indri_path", dest="indri_path", default="../indri")
     parser.add_option("--doc_tfidf_dir", dest="doc_tfidf_dir", default="./asr_tfidf_vectors/")
     parser.add_option("--sentences_tfidf_dir", dest="sentences_tfidf_dir", default="./greg_output/sentences_tfidf_dir/")
-    parser.add_option("--queries_file", dest="queries_file", default="data/queries_bot.xml")
+    parser.add_option("--queries_file", dest="queries_file", default="data/queries_bot_modified_sorted.xml")
     parser.add_option("--scores_dir", dest="scores_dir", default="./greg_output/scores_dir")
     parser.add_option("--trec_file", dest="trec_file", default="./trecs/trec_file_original_sorted.txt")
     # parser.add_option("--sentence_trec_file", dest="sentence_trec_file") #not used
