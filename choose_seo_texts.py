@@ -4,6 +4,8 @@ from tqdm import tqdm
 from utils import run_bash_command
 
 pos = 5
+final = True
+print("handling position: ", pos, "...\n")
 
 data_dict = {}
 folder_path = '/lv_local/home/niv.b/content_modification_code-master/greg_output/output_feature_files_dir'
@@ -17,6 +19,8 @@ ind_to_feature_dict = {v: k for k, v in feature_to_ind_dict.items()}
 
 empty_files = []
 for filename in tqdm(os.listdir(folder_path)):
+    if filename[-1] != str(pos):
+        continue
     feature_name = filename.split('doc_')[-1].split('_')[0]
     if feature_name not in feature_list:
         raise Exception(f"feature name {feature_name} not in feature list")
@@ -46,8 +50,8 @@ df = df.reset_index()
 df['qid'] = df['index'].str.split('-').str.get(2)
 df.sort_values(by="qid", ascending=True, inplace=True)
 
-df.to_csv(f"./greg_output/feature_summary_{pos}.csv", index=False)
-with open(f"./greg_output/test_{pos}.dat", 'w') as file:
+df.to_csv(f"./greg_output/saved_result_files/feature_summary_{pos}.csv", index=False)
+with open(f"./greg_output/saved_result_files/test_{pos}.dat", 'w') as file:
     for idx, row in tqdm(df.iterrows()):
         str_ = f"0 qid:{row.qid} "
         for feature in feature_list:
@@ -56,16 +60,20 @@ with open(f"./greg_output/test_{pos}.dat", 'w') as file:
 
 print("created test.dat file")
 
-run_bash_command(f"/lv_local/home/niv.b/svm_rank/svm_rank_classify /lv_local/home/niv.b/content_modification_code-master/greg_output/test_{pos}.dat /lv_local/home/niv.b/content_modification_code-master/rank_models/harmonic_competition_model /lv_local/home/niv.b/content_modification_code-master/greg_output/predictions_{pos}.txt")
+out = run_bash_command(
+    f"/lv_local/home/niv.b/svm_rank/svm_rank_classify /lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/test_{pos}.dat /lv_local/home/niv.b/content_modification_code-master/rank_models/harmonic_competition_model /lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/predictions_{pos}.txt")
+print(out)
 
 print("created predictions file")
 
-df = pd.read_csv(f"./greg_output/feature_summary_{pos}.csv")[["index"]].rename(columns={"index":"ID"})
-text_df = pd.DataFrame([line.strip().split(None, 2) for line in open('./greg_output/raw_ds_out.txt')], columns=['index_', 'ID', 'text'])
+df = pd.read_csv(f"./greg_output/saved_result_files/feature_summary_{pos}.csv")[["index"]].rename(
+    columns={"index": "ID"})
+text_df = pd.DataFrame(
+    [line.strip().split(None, 2) for line in open(f'./greg_output/saved_result_files/raw_ds_out_{pos}.txt')],
+    columns=['index_', 'ID', 'text'])
 
-
-with open(f"./greg_output/predictions_{pos}.txt", 'r') as file:
-    vals = [float(val.replace("\n","")) for val in file.readlines()]
+with open(f"./greg_output/saved_result_files/predictions_{pos}.txt", 'r') as file:
+    vals = [float(val.replace("\n", "")) for val in file.readlines()]
 
 df["score"] = vals
 df["docno"] = df["ID"].str.split("_").str.get(0).str.split("$").str.get(0)
@@ -73,11 +81,19 @@ df['rank'] = df.groupby('docno')['score'].rank(method='first', ascending=False).
 df.sort_values(["docno", "rank"], inplace=True)
 df[["_", "round_no", "query_id", "creator"]] = df["docno"].str.split("-", expand=True)
 df_rank1 = df.query('rank == 1')
-df_rank1 = df_rank1[df_rank1.round_no == '06'] #train data according to the articlechoos
+df_rank1 = df_rank1[df_rank1.round_no.isin(["06", "07"])]  # train+test data according to the articlechoos
 final_df = df_rank1.merge(text_df, on="ID", how="left")
 final_df["username"] = "BOT"
 final_df = final_df[["round_no", "query_id", "creator", "username", "text"]]
 final_df["round_no"] = final_df["round_no"].str.replace("0", "")
-final_df.to_csv("./greg_output/bot_followup_asrc.csv", index = False)
+final_df.to_csv(f"./greg_output/saved_result_files/bot_followup_asrc_{pos}.csv", index=False)
 
-print("created bot followup file")
+print("created bot followup file for position: ", pos, "\n")
+
+if final:
+    # concat rounds 2-5
+    df = pd.concat(
+        [pd.read_csv(f"./greg_output/saved_result_files/bot_followup_asrc_{i}.csv") for i in [2, 3, 4, 5]],
+        ignore_index=True)
+
+    df.to_csv("./greg_output/saved_result_files/bot_followup_asrc.csv", index=False)

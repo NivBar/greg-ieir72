@@ -57,6 +57,8 @@ def create_sentence_pairs(top_docs, ref_doc, texts):
 def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", ref_index=-1, top_docs_index=3):
     with open(output_file, 'w') as output:
         for epoch in ranked_lists:
+            if epoch in ["06","07"]:
+                x = 1
             for query in ranked_lists[epoch]:
                 top_docs = ranked_lists[epoch][query][:top_docs_index]
                 ref_doc = ranked_lists[epoch][query][ref_index]
@@ -160,7 +162,9 @@ def past_winners_centroid(past_winners, texts, model, stemmer=None):
 
 def write_files(feature_list, feature_vals, output_dir, qid, ref):
     epoch, query = reverese_query(qid)
-    ind_name = {-1: "5", 1: "2"}
+    # ind_name = {-1: "5", 1: "2"}
+    ind_name = {-1: "5", 1: "2", -3: "3", -2: "4"}
+
     query_write = query + str(int(epoch)) + ind_name[ref]
     for feature in feature_list:
         with open(output_dir + "/doc_" + feature + "_" + query_write, 'w') as out:
@@ -186,7 +190,10 @@ def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_inde
     for feature in feature_list:
         feature_vals[feature] = {}
 
-    qid_original, epoch  = qid.split("_")
+    qid_original, epoch = qid.split("_")
+    #TODO: remove debugging
+    if epoch in ["06","07"]:
+        x = 1
     if epoch in ["01"]:
         return
     past_winners = get_past_winners(ranked_lists, epoch, qid_original)
@@ -316,7 +323,8 @@ def update_texts(doc_texts, pairs_ranked_lists, sentence_data):
 
 
 def create_ws(raw_ds, ws_fname, ref):
-    ind_name = {-1: "5", 1: "2"}
+    # ind_name = {-1: "5", 1: "2"}
+    ind_name = {-1: "5", 1: "2", -3: "3", -2: "4"}
     if not os.path.exists(os.path.dirname(ws_fname)):
         os.makedirs(os.path.dirname(ws_fname))
     with open(ws_fname, 'w') as ws:
@@ -324,7 +332,7 @@ def create_ws(raw_ds, ws_fname, ref):
             epoch, query = reverese_query(qid)
             # if epoch not in ["04", "06"]:
             #     continue
-            query_write = query + str(int(epoch.replace("_",""))) + ind_name[ref]
+            query_write = query + str(int(epoch.replace("_", ""))) + ind_name[ref]
             for i, pair in enumerate(raw_ds[qid]):
                 pair_split = custom_split(pair)
                 out_ = str(int(pair_split[1]) + 1)
@@ -344,9 +352,11 @@ def create_new_trectext(doc, texts, new_text, new_trectext_name):
     text_copy[doc] = new_text
     create_trectext(text_copy, new_trectext_name, "ws_debug")
 
+
 def qid_matching(comp_id):
-    qid, epoch =  comp_id.split("_")
-    return str(int(qid)*100 + int(epoch))
+    qid, epoch = comp_id.split("_")
+    return str(int(qid) * 100 + int(epoch))
+
 
 def create_specifi_ws(qid, ranked_, fname):
     new_quid = qid_matching(qid)
@@ -427,7 +437,8 @@ def create_qrels(raw_ds, base_trec, out_file, ref, new_indices_dir, texts, optio
                                            ranked_, features_file, feature_dir, trec_dir + fname_pair,
                                            scores_dir + fname_pair, options)
                 new_lists = read_raw_trec_file(final_trec)
-                label = str(max(ranked_lists[epoch][query].index(ref_doc) - new_lists[comp_id.replace("0","").replace("_","0")].index(ref_doc), 0))
+                label = str(max(ranked_lists[epoch][query].index(ref_doc) - new_lists[
+                    comp_id.replace("0", "").replace("_", "0")].index(ref_doc), 0))
                 qrels.write(query_write + " 0 " + name + " " + label + "\n")
 
 
@@ -443,8 +454,9 @@ if __name__ == "__main__":
     parser.add_option("--mode", dest="mode", default="features")
     parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/cluewebindex')
     parser.add_option("--raw_ds_out", dest="raw_ds_out", default="./greg_output/raw_ds_out.txt")
+    #TODO: fix the ref index to non minus (especially when building raw db)
     parser.add_option("--ref_index", dest="ref_index",
-                      default="1")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
+                      default="-1")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
     parser.add_option("--top_docs_index", dest="top_docs_index", default="3")
     parser.add_option("--home_path", dest="home_path", default="./")
     parser.add_option("--jar_path", dest="jar_path", default="./scripts/RankLib.jar")
@@ -468,8 +480,8 @@ if __name__ == "__main__":
     parser.add_option("--trectext_file", dest="trectext_file", default="./data/documents.trectext")
     parser.add_option("--new_trectext_file", dest="new_trectext_file")
     parser.add_option("--embedding_model_file", dest="embedding_model_file",
-                      default="./embedding_models/GoogleNews-vectors-negative300.bin")
-    parser.add_option("--workingset_file", dest="workingset_file", default = "./greg_output/working_set_test.trectext")
+                      default="./W2V/word2vec_model")
+    parser.add_option("--workingset_file", dest="workingset_file", default="./greg_output/working_set_test.trectext")
     parser.add_option("--svm_model_file", dest="svm_model_file", default="./rank_models/harmonic_competition_model")
     (options, args) = parser.parse_args()
 

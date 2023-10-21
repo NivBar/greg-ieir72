@@ -1,6 +1,4 @@
 import os
-# import datetime
-# import csv
 import subprocess
 import time
 import multiprocessing
@@ -94,7 +92,7 @@ def run_ranking_model(mergedIndex, workingSet, currentTime, baseDir):
     # MODEL_DIR = baseDir+"Code/Models/"
     # MODEL_FILE = MODEL_DIR+"model"
     MODEL_FILE = '/lv_local/home/niv.b/content_modification_code-master/rank_models/model_lambdatamart'
-    QUERIES_FILE = '/lv_local/home/niv.b/content_modification_code-master/data/queries_bot.xml'
+    QUERIES_FILE = '/lv_local/home/niv.b/content_modification_code-master/data/queries_bot_modified_sorted_1.xml'
     FEATURES_DIR = pathToFolder + '/Features/' + currentTime
     if not os.path.exists(FEATURES_DIR):
         os.makedirs(FEATURES_DIR)
@@ -163,7 +161,7 @@ def main_task(currentTime):
 if __name__ == '__main__':
     num_cores = multiprocessing.cpu_count()
     pool = multiprocessing.Pool(processes=num_cores)
-    current_times = ["7"]
+    current_times = ["asrc"]
     print(f"running {current_times[0]} model...")
     pool.map(main_task, current_times)
     pool.close()
