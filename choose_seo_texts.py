@@ -3,7 +3,7 @@ import pandas as pd
 from tqdm import tqdm
 from utils import run_bash_command
 
-pos = 5
+pos = 2
 final = True
 print("handling position: ", pos, "...\n")
 

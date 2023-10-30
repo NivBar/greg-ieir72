@@ -1,7 +1,9 @@
 import os
 import subprocess
 import time
-import multiprocessing
+import logging.handlers
+
+# import multiprocessing
 
 
 def measure_time(func):
@@ -145,24 +147,37 @@ def run_ranking_model(mergedIndex, workingSet, currentTime, baseDir):
 #     x = 1
 
 def main_task(currentTime):
+    logger.info("Starting...")
     baseDir = '/lv_local/home/niv.b/content_modification_code-master/'
     documents = f'/lv_local/home/niv.b/content_modification_code-master/trecs/bot_followup_{currentTime}.trectext'
     workingSet = f'/lv_local/home/niv.b/content_modification_code-master/trecs/working_set_{currentTime}.trectext'
 
     asrIndex = build_index(documents, currentTime, baseDir)
     print("build_index done...")
+    logger.info("build_index done...")
+
     mergedIndex = merge_indices(asrIndex, baseDir, currentTime)
     print("merge_indices done...")
+    logger.info("merge_indices done...")
 
     res = run_ranking_model(mergedIndex, workingSet, currentTime, baseDir)
     print("run_ranking_model done...")
+    logger.info("run_ranking_model done...")
+
     print(res)
+    logger.info(f'{res}')
+
 
 if __name__ == '__main__':
-    num_cores = multiprocessing.cpu_count()
-    pool = multiprocessing.Pool(processes=num_cores)
-    current_times = ["asrc"]
-    print(f"running {current_times[0]} model...")
-    pool.map(main_task, current_times)
-    pool.close()
-    pool.join()
+    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s', level=logging.DEBUG)
+    logger = logging.getLogger('ranking_logger')
+    logger.setLevel(logging.DEBUG)
+    # num_cores = multiprocessing.cpu_count()
+    # pool = multiprocessing.Pool(processes=num_cores)
+    # current_times = ["g1"]
+    # print(f"running {current_times[0]} model...")
+    # pool.map(main_task, current_times)
+    # pool.close()
+    # pool.join()
+    current_time = "asrc"
+    main_task(current_time)

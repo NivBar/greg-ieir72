@@ -455,8 +455,9 @@ if __name__ == "__main__":
     parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/cluewebindex')
     parser.add_option("--raw_ds_out", dest="raw_ds_out", default="./greg_output/raw_ds_out.txt")
     #TODO: fix the ref index to non minus (especially when building raw db)
+    # idx_dict = {-1: 5, -2: 4, -3: 3, -4: 2, -5: 1}
     parser.add_option("--ref_index", dest="ref_index",
-                      default="-1")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
+                      default="-4")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
     parser.add_option("--top_docs_index", dest="top_docs_index", default="3")
     parser.add_option("--home_path", dest="home_path", default="./")
     parser.add_option("--jar_path", dest="jar_path", default="./scripts/RankLib.jar")
@@ -480,7 +481,7 @@ if __name__ == "__main__":
     parser.add_option("--trectext_file", dest="trectext_file", default="./data/documents.trectext")
     parser.add_option("--new_trectext_file", dest="new_trectext_file")
     parser.add_option("--embedding_model_file", dest="embedding_model_file",
-                      default="./W2V/word2vec_model")
+                      default="./W2V/models/docFiles_w2v_final")
     parser.add_option("--workingset_file", dest="workingset_file", default="./greg_output/working_set_test.trectext")
     parser.add_option("--svm_model_file", dest="svm_model_file", default="./rank_models/harmonic_competition_model")
     (options, args) = parser.parse_args()
