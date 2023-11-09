@@ -1,0 +1,1 @@
+nohup python /lv_local/home/niv.b/content_modification_code-master/W2V/modified_train_word2vec.py 2>&1 | tee /lv_local/home/niv.b/content_modification_code-master/W2V/logs/w2v_prog.log &

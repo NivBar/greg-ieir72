@@ -94,7 +94,9 @@ def run_ranking_model(mergedIndex, workingSet, currentTime, baseDir):
     # MODEL_DIR = baseDir+"Code/Models/"
     # MODEL_FILE = MODEL_DIR+"model"
     MODEL_FILE = '/lv_local/home/niv.b/content_modification_code-master/rank_models/model_lambdatamart'
-    QUERIES_FILE = '/lv_local/home/niv.b/content_modification_code-master/data/queries_bot_modified_sorted_1.xml'
+    # QUERIES_FILE = '/lv_local/home/niv.b/content_modification_code-master/data/queries_bot_modified_sorted_1.xml'
+    QUERIES_FILE = f'/lv_local/home/niv.b/content_modification_code-master/data/query_files/queries_{current_time}.xml'
+
     FEATURES_DIR = pathToFolder + '/Features/' + currentTime
     if not os.path.exists(FEATURES_DIR):
         os.makedirs(FEATURES_DIR)
@@ -160,6 +162,7 @@ def main_task(currentTime):
     print("merge_indices done...")
     logger.info("merge_indices done...")
 
+    # mergedIndex = baseDir + 'Collections/' + f'/mergedindex_{currentTime}' # in case of running only the ranking model
     res = run_ranking_model(mergedIndex, workingSet, currentTime, baseDir)
     print("run_ranking_model done...")
     logger.info("run_ranking_model done...")
@@ -179,5 +182,6 @@ if __name__ == '__main__':
     # pool.map(main_task, current_times)
     # pool.close()
     # pool.join()
-    current_time = "asrc"
+    current_time = "asrc2"
+    print(f'Starting version {current_time}...')
     main_task(current_time)
