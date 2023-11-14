@@ -3,7 +3,7 @@ use POSIX qw/floor/;
 $featuresDir = shift;
 $workingSetFile = shift;
 
-@streamList = ("doc");
+@streamList = ("doc_");
 #@featureList1 = ("FractionOfQueryWordsIn","FractionOfQueryWordsOut","CosineToCentroidIn","CosineToCentroidInVec","CosineToCentroidOut","CosineToCentroidOutVec");
 @featureList1 = ("FractionOfQueryWordsIn","FractionOfQueryWordsOut","CosineToCentroidIn","CosineToCentroidInVec","CosineToCentroidOut","CosineToCentroidOutVec","CosineToWinnerCentroidInVec","CosineToWinnerCentroidOutVec","CosineToWinnerCentroidIn","CosineToWinnerCentroidOut","SimilarityToPrev","SimilarityToRefSentence","SimilarityToPred","SimilarityToPrevRef","SimilarityToPredRef");
 
@@ -12,6 +12,7 @@ open(FI, "< $workingSetFile") or die "Open $workingSetFile failed.\n";
 while(<FI>){
 	($qID,$Q0,$dID,$pos,$score,$indri) = split(/ / ,$_);
 	$initDocs{$qID}{$dID} = $pos;
+	print "$qID $dID\n\n";
 }#while
 close(FI);
 
@@ -34,10 +35,12 @@ foreach $feature (@featureList1){
 				open(FI, "< $featureFile") or die "Open $featureFile failed.";
 				while(<FI>){
 					chomp($_);
-					($dID,$score) = split(/ / ,$_);
+					($dID_full,$score) = split(/ / ,$_);
+					($ref,$dID) = split(/\$/,$dID_full);
 					if (exists $initDocs{$qID}{$dID}){
 						$features{$featureName}{$qID}{$dID} = $score;
 					}#if
+					# else { print "$featureFile $dID\n";}
 				}#while
 				close(FI);
 			}#if

@@ -33,6 +33,7 @@ def custom_split(s):
 
 def create_sentence_pairs(top_docs, ref_doc, texts):
     result = {}
+    result_texts = {}
     ref_sentences = sent_tokenize(texts[ref_doc])
     for doc in top_docs:
         doc_sentences = sent_tokenize(texts[doc])
@@ -40,7 +41,10 @@ def create_sentence_pairs(top_docs, ref_doc, texts):
             for j, ref_sentence in enumerate(ref_sentences):
                 key = ref_doc + "$" + doc + "_" + str(j) + "_" + str(i)
                 result[key] = ref_sentence.rstrip().replace("\n", "") + "\t" + top_sentence.rstrip().replace("\n", "")
-    return result
+                text_lst = ref_sentences.copy()
+                text_lst[j] = top_sentence
+                result_texts[key] = ' '.join(text_lst).rstrip().replace("\n", "")
+    return result, result_texts
 
 
 # def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", ref_index=-1, top_docs_index=3):
@@ -56,16 +60,18 @@ def create_sentence_pairs(top_docs, ref_doc, texts):
 
 def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", ref_index=-1, top_docs_index=3):
     with open(output_file, 'w') as output:
-        for epoch in ranked_lists:
-            if epoch != "07": #TODO: only testing!!!
-                continue
-            for query in ranked_lists[epoch]:
-                top_docs = ranked_lists[epoch][query][:top_docs_index]
-                ref_doc = ranked_lists[epoch][query][ref_index]
-                pairs = create_sentence_pairs(top_docs, ref_doc, doc_texts)
-                for key in pairs:
-                    output.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs[key] + "\n")
-    x = 1
+        with open(output_file.replace(".txt","_texts.txt"), 'w') as output_texts:
+            for epoch in ranked_lists:
+                if epoch != "07": #TODO: only testing!!!
+                    continue
+                for query in ranked_lists[epoch]:
+                    top_docs = ranked_lists[epoch][query][:top_docs_index]
+                    ref_doc = ranked_lists[epoch][query][ref_index]
+                    pairs, pairs_text = create_sentence_pairs(top_docs, ref_doc, doc_texts)
+                    for key in pairs:
+                        output.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs[key] + "\n")
+                        output_texts.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs_text[key] + "\n")
+                        x = 1
 
 
 # def read_raw_ds(raw_dataset):
@@ -277,10 +283,11 @@ def feature_creation_parallel(raw_dataset_file, ranked_lists, doc_texts, top_doc
 
     # TODO: using my script (choose_seo_texts_new.py) to create the final features file
     ind_name = {-1: "5", 1: "2", -3: "3", -2: "4"}
-    command = "perl scripts/generateSentences.pl " + output_feature_files_dir + " " + workingset_file.replace(".txt",f"_{ind_name[ref_doc_index]}.txt")
+    command = "perl /lv_local/home/niv.b/content_modification_code-master/scripts/generateSentences.pl " + output_feature_files_dir + " " + workingset_file
     run_bash_command(command)
-    run_bash_command("mv features " + output_final_features_dir)
-
+    run_bash_command(f"mv features " + output_final_features_dir)
+    # TODO: my additoon
+    os.rename(output_final_features_dir + '/features', output_final_features_dir + f'/features_{ind_name[ref_doc_index]}')
 
 def run_svm_rank_model(test_file, model_file, predictions_folder):
     if not os.path.exists(predictions_folder):
@@ -352,12 +359,12 @@ def create_ws(raw_ds,ws_fname,ref):
     if not os.path.exists(os.path.dirname(ws_fname)):
         os.makedirs(os.path.dirname(ws_fname))
     lines = []
-    for qid in raw_ds:
+    for qid in sorted(raw_ds):
         epoch, query = reverese_query(qid)
         if epoch == '01':
             continue
-        query_write = query.replace("_","") + str(int(epoch)) + ind_name[ref]
-        for i, pair in enumerate(raw_ds[qid]):
+        query_write = query + str(int(epoch)) + ind_name[ref]
+        for i, pair in enumerate(sorted(raw_ds[qid])):
             out_ = str(int(pair.split("_")[1]))
             in_ = str(int(pair.split("_")[2]))
             # name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
@@ -367,7 +374,7 @@ def create_ws(raw_ds,ws_fname,ref):
                 lines.append(s)
             else:
                 x = 1
-    with open(ws_fname.replace(".txt",f"_{ind_name[ref]}.txt"),'w') as ws:
+    with open(ws_fname,'w') as ws:
         ws.writelines(lines)
     x = 1
 
@@ -474,6 +481,10 @@ def create_specifi_ws(qid, ranked_, fname):
 
 
 if __name__ == "__main__":
+    #TODO: fix the ref index to non minus (especially when building raw db)
+    POS = 1
+    ind_name = {-1: "5", 1: "2", -3: "3", -2: "4"}
+
     program = os.path.basename(sys.argv[0])
     logger = logging.getLogger(program)
 
@@ -486,12 +497,9 @@ if __name__ == "__main__":
     # parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/cluewebindex')
     parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/INDEX')
 
-    parser.add_option("--raw_ds_out", dest="raw_ds_out", default="./greg_output/raw_ds_out.txt")
-    #TODO: fix the ref index to non minus (especially when building raw db)
-    # idx_dict = {-1: 5, -2: 4, -3: 3, -4: 2, -5: 1}
+    parser.add_option("--raw_ds_out", dest="raw_ds_out", default=f"./greg_output/saved_result_files/raw_ds_out_{ind_name[POS]}.txt")
     parser.add_option("--ref_index", dest="ref_index",
-                      default="-1")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
-
+                      default=f"{POS}")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
     parser.add_option("--top_docs_index", dest="top_docs_index", default="3")
     parser.add_option("--home_path", dest="home_path", default="./")
     parser.add_option("--jar_path", dest="jar_path", default="./scripts/RankLib.jar")
@@ -516,7 +524,7 @@ if __name__ == "__main__":
     parser.add_option("--new_trectext_file", dest="new_trectext_file")
     parser.add_option("--embedding_model_file", dest="embedding_model_file",
                       default="./W2V/models/docFiles_w2v_final")
-    parser.add_option("--workingset_file", dest="workingset_file", default="./greg_output/saved_result_files/ws_output.txt")
+    parser.add_option("--workingset_file", dest="workingset_file", default=f"./greg_output/saved_result_files/ws_output_{ind_name[POS]}.txt")
     parser.add_option("--svm_model_file", dest="svm_model_file", default="./rank_models/harmonic_competition_model")
     (options, args) = parser.parse_args()
 

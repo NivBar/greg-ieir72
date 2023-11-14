@@ -154,15 +154,15 @@ def main_task(currentTime):
     documents = f'/lv_local/home/niv.b/content_modification_code-master/trecs/bot_followup_{currentTime}.trectext'
     workingSet = f'/lv_local/home/niv.b/content_modification_code-master/trecs/working_set_{currentTime}.trectext'
 
-    asrIndex = build_index(documents, currentTime, baseDir)
-    print("build_index done...")
-    logger.info("build_index done...")
+    # asrIndex = build_index(documents, currentTime, baseDir)
+    # print("build_index done...")
+    # logger.info("build_index done...")
+    #
+    # mergedIndex = merge_indices(asrIndex, baseDir, currentTime)
+    # print("merge_indices done...")
+    # logger.info("merge_indices done...")
 
-    mergedIndex = merge_indices(asrIndex, baseDir, currentTime)
-    print("merge_indices done...")
-    logger.info("merge_indices done...")
-
-    # mergedIndex = baseDir + 'Collections/' + f'/mergedindex_{currentTime}' # in case of running only the ranking model
+    mergedIndex = baseDir + 'Collections/' + f'/mergedindex_{currentTime}' # in case of running only the ranking model
     res = run_ranking_model(mergedIndex, workingSet, currentTime, baseDir)
     print("run_ranking_model done...")
     logger.info("run_ranking_model done...")
@@ -182,6 +182,6 @@ if __name__ == '__main__':
     # pool.map(main_task, current_times)
     # pool.close()
     # pool.join()
-    current_time = "asrc2"
+    current_time = "asrc3"
     print(f'Starting version {current_time}...')
     main_task(current_time)
