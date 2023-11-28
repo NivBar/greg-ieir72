@@ -1,11 +1,66 @@
 import os
 import javaobj
 import pandas as pd
-
 from gen_utils import run_bash_command, run_command
 import xml.etree.ElementTree as ET
 from lxml import etree
 import re
+
+
+def process_files(source_dir, target_dir):
+    # Ensure the target directory exists
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+
+    # Iterate over files in the source directory
+    for filename in os.listdir(source_dir):
+        if filename.startswith("features"):
+            # Construct full file paths
+            source_file = os.path.join(source_dir, filename)
+            target_file = os.path.join(target_dir, filename + ".dat")
+
+            # Read the source file and replace underscores
+            lines = []
+            with open(source_file, 'r') as file:
+                content = file.readlines()
+                for line in content:
+                    line = line.replace("_", "", 1)
+                    lines.append(line)
+
+            # Write the modified content to the target file
+            with open(target_file, 'w') as file:
+                file.writelines(lines)
+
+
+def create_train_data():
+    df_wl = pd.read_csv("/lv_local/home/niv.b/train_RankSVM/waterloo_scores_file.txt", delimiter='\t', header=None).rename({0: "docno", 1: "wl_score"}, axis=1)
+    df_qrels = pd.read_csv("/lv_local/home/niv.b/train_RankSVM/qrels_seo_bot.txt", delimiter=' ', header=None)
+    df_qrels[['query_id', 'round_no', 'position']] = df_qrels[0].apply(
+        lambda x: pd.Series([str(x)[:-2], str(x)[-2], str(x)[-1]]))
+    greg_data = pd.read_csv("/lv_local/home/niv.b/CharPDM/greg_data.csv")
+    for col in ['query_id', 'round_no', 'position']:
+        df_qrels = df_qrels.astype({col: 'int64'})
+        greg_data = greg_data.astype({col: 'int64'})
+    df_qrels = df_qrels.merge(greg_data, on=['query_id', 'round_no', 'position'], how='left')
+    df_qrels = df_qrels.merge(df_wl, how='left', on='docno')
+    df_qrels = df_qrels[df_qrels.wl_score >= 60]
+    rel_rows = df_qrels[2].unique().tolist()
+
+    rows = []
+    for i in [2, 5]:
+        with open(
+                f"/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/features_{i}.dat",
+                'r') as f:
+            lines = f.readlines()
+            for line in lines:
+                rel = line.split("#")[-1].strip()
+                if rel in rel_rows:
+                    rows.append(line)
+    with open(
+            f"/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/features_train.dat",
+            'w') as f:
+        f.writelines(rows)
+
 
 
 def create_features_file_diff(features_dir, base_index_path, new_index_path, new_features_file, working_set_file,
@@ -64,9 +119,9 @@ def read_trec_file(trec_file):
             #     continue
             query = doc.split("-")[2]
             if epoch not in stats:
-                stats[epoch]={}
+                stats[epoch] = {}
             if query not in stats[epoch]:
-                stats[epoch][query]=[]
+                stats[epoch][query] = []
             stats[epoch][query].append(doc)
     return stats
 

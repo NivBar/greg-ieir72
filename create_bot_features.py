@@ -3,7 +3,7 @@ import sys
 from optparse import OptionParser
 import gensim
 from tqdm import tqdm
-
+import utils
 from gen_utils import run_bash_command, list_multiprocessing
 import os
 from copy import deepcopy
@@ -29,6 +29,7 @@ from functools import partial
 #
 # # If you want to save the model to a file
 # model.save_word2vec_format('embedding_models/GoogleNews-vectors-negative300.bin', binary=True)
+
 def custom_split(s):
     return s.rsplit('_', 2)[0], s.rsplit('_', 2)[1], s.rsplit('_', 2)[2]
 
@@ -41,7 +42,9 @@ def create_sentence_pairs(top_docs, ref_doc, texts):
         doc_sentences = sent_tokenize(texts[doc])
         for i, top_sentence in enumerate(doc_sentences):
             for j, ref_sentence in enumerate(ref_sentences):
-                key = ref_doc + "$" + doc + "_" + str(j) + "_" + str(i)
+                # key = ref_doc + "$" + doc + "_" + str(j) + "_" + str(i)
+                key = ref_doc + "$" + doc + "_" + str(i + 1) + "_" + str(j + 1)  # fix to fit qrels
+
                 result[key] = ref_sentence.rstrip().replace("\n", "") + "\t" + top_sentence.rstrip().replace("\n", "")
                 text_lst = ref_sentences.copy()
                 text_lst[j] = top_sentence
@@ -60,26 +63,28 @@ def create_sentence_pairs(top_docs, ref_doc, texts):
 #                 for key in pairs:
 #                     output.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs[key] + "\n")
 
-def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", ref_index=-1, top_docs_index=3):
-
-    ref_to_ind = {-1:4, -2:3, -3:2, 1:1}
+def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", ref_index=-1, top_docs_index=3,
+                       is_train=True):
+    ref_to_ind = {-1: 4, -2: 3, -3: 2, 1: 1}
 
     with open(output_file, 'w') as output:
-        with open(output_file.replace(".txt","_texts.txt"), 'w') as output_texts:
+        with open(output_file.replace(".txt", "_texts.txt"), 'w') as output_texts:
             for epoch in ranked_lists:
-                if epoch not in ["06","04"]: #TODO: only train!!!
-                # if epoch not in ["07"]: #TODO: only test!!!
+                if is_train:
+                    rel_eps = ["06", "04"] #train!!!
+                else:
+                    rel_eps = ["07"] #test!!!
+                if epoch not in rel_eps:
                     continue
                 for query in ranked_lists[epoch]:
-                    top_docs = ranked_lists[epoch][query][:min(top_docs_index,ref_to_ind[ref_index])]
-                    if len(ranked_lists[epoch][query]) > 5:
-                        ranked_lists[epoch][query] = ranked_lists[epoch][query][:5] # my addition, avoid 6 texts
+                    top_docs = ranked_lists[epoch][query][:top_docs_index]
+                    # if len(ranked_lists[epoch][query]) > 5:
+                    #     ranked_lists[epoch][query] = ranked_lists[epoch][query][:5]  # my addition, avoid 6 texts
                     ref_doc = ranked_lists[epoch][query][ref_index]
                     pairs, pairs_text = create_sentence_pairs(top_docs, ref_doc, doc_texts)
                     for key in pairs:
                         output.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs[key] + "\n")
                         output_texts.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs_text[key] + "\n")
-
 
 
 # def read_raw_ds(raw_dataset):
@@ -118,21 +123,25 @@ def reverese_query(qid):
 
 
 def context_similarity(replacement_index, ref_sentences, sentence_compared, mode, model, stemmer=None):
-    if mode == "own":
-        ref_sentence = ref_sentences[replacement_index]
-        return centroid_similarity(clean_texts(ref_sentence), clean_texts(sentence_compared), model, stemmer)
-    if mode == "pred":
-        if replacement_index + 1 == len(ref_sentences):
-            sentence = ref_sentences[replacement_index]
-        else:
-            sentence = ref_sentences[replacement_index + 1]
-        return centroid_similarity(clean_texts(sentence), clean_texts(sentence_compared), model, stemmer)
-    if mode == "prev":
-        if replacement_index == 0:
-            sentence = ref_sentences[replacement_index]
-        else:
-            sentence = ref_sentences[replacement_index - 1]
-        return centroid_similarity(clean_texts(sentence), clean_texts(sentence_compared), model, stemmer)
+    try:
+        if mode == "own":
+            ref_sentence = ref_sentences[replacement_index]
+            return centroid_similarity(clean_texts(ref_sentence), clean_texts(sentence_compared), model, stemmer)
+        if mode == "pred":
+            if replacement_index + 1 == len(ref_sentences):
+                sentence = ref_sentences[replacement_index]
+            else:
+                sentence = ref_sentences[replacement_index + 1]
+            return centroid_similarity(clean_texts(sentence), clean_texts(sentence_compared), model, stemmer)
+        if mode == "prev":
+            if replacement_index == 0:
+                sentence = ref_sentences[replacement_index]
+            else:
+                sentence = ref_sentences[replacement_index - 1]
+            return centroid_similarity(clean_texts(sentence), clean_texts(sentence_compared), model, stemmer)
+    except:
+        x = 1
+        print("ERROR", "replacement_index:", replacement_index, "len ref_sentences:", len(ref_sentences),"mode:", mode)
 
 
 def get_past_winners(ranked_lists, epoch, query):
@@ -206,8 +215,8 @@ def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_inde
         feature_vals[feature] = {}
 
     qid_original, epoch = qid.split("_")
-    #TODO: remove debugging
-    if epoch in ["06","07"]:
+    # TODO: remove debugging
+    if epoch in ["06", "07"]:
         x = -1
     if epoch in ["01"]:
         return
@@ -223,7 +232,7 @@ def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_inde
         sentence_out = relevant_pairs[pair]["out"]
         in_vec = get_text_centroid(clean_texts(sentence_in), word_embd_model, True)
         out_vec = get_text_centroid(clean_texts(sentence_out), word_embd_model, True)
-        replace_index = int(pair.split("_")[1])
+        replace_index = int(pair.split("_")[-1]) - 1  # fix to fit qrels
         query = queries[qid_original]
 
         feature_vals['FractionOfQueryWordsIn'][pair] = query_term_freq("avg", clean_texts(sentence_in),
@@ -295,7 +304,9 @@ def feature_creation_parallel(raw_dataset_file, ranked_lists, doc_texts, top_doc
     run_bash_command(command)
     run_bash_command(f"mv features " + output_final_features_dir)
     # TODO: my additoon
-    os.rename(output_final_features_dir + '/features', output_final_features_dir + f'/features_{ind_name[ref_doc_index]}')
+    os.rename(output_final_features_dir + '/features',
+              output_final_features_dir + f'/features_{ind_name[ref_doc_index]}')
+
 
 def run_svm_rank_model(test_file, model_file, predictions_folder):
     if not os.path.exists(predictions_folder):
@@ -362,7 +373,7 @@ def update_texts(doc_texts, pairs_ranked_lists, sentence_data):
 #                 name = custom_split(pair.split("$")[1])[0] + "_" + in_ + "_" + out_
 #                 ws.write(query_write + " Q0 " + name + " 0 " + str(i + 1) + " pairs_seo\n")
 
-def create_ws(raw_ds,ws_fname,ref):
+def create_ws(raw_ds, ws_fname, ref):
     ind_name = {-1: "5", 1: "2", -3: "3", -2: "4"}
     if not os.path.exists(os.path.dirname(ws_fname)):
         os.makedirs(os.path.dirname(ws_fname))
@@ -376,13 +387,13 @@ def create_ws(raw_ds,ws_fname,ref):
             out_ = str(int(pair.split("_")[1]))
             in_ = str(int(pair.split("_")[2]))
             # name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
-            name = pair.split("$")[1].split("_")[0] + "_" + out_ + "_" + in_
-            s = query_write + " Q0 " + name + " 0 " + str(i + 1) + " pairs_seo\n"
+            name = pair.split("$")[1].split("_")[0] + "_" + out_ + "_" + in_  # fix to fit qrels
+            s = query_write + " Q0 " + name + " 0 " + str(i) + " pairs_seo\n"
             if type(s) == str:
                 lines.append(s)
             else:
                 x = 1
-    with open(ws_fname,'w') as ws:
+    with open(ws_fname, 'w') as ws:
         ws.writelines(lines)
     x = 1
 
@@ -404,11 +415,12 @@ def qid_matching(comp_id):
     return str(int(qid) * 100 + int(epoch))
 
 
-def create_specifi_ws(qid, ranked_, fname):
-    new_quid = qid_matching(qid)
-    with open(fname, 'w') as out:
-        for i, doc in enumerate(ranked_):
-            out.write(new_quid + " Q0 " + doc + " 0 " + str(i + 1) + " pairs_seo\n")
+#
+# def create_specifi_ws(qid, ranked_, fname):
+#     new_quid = qid_matching(qid)
+#     with open(fname, 'w') as out:
+#         for i, doc in enumerate(ranked_):
+#             out.write(new_quid + " Q0 " + doc + " 0 " + str(i + 1) + " pairs_seo\n")
 
 
 # def run_reranking(new_index, sentence_in, qid, specific_ws, ref_doc, out_index, texts, new_trectext_name, ranked_,
@@ -491,11 +503,26 @@ def create_specifi_ws(qid, ranked_, fname):
 
 
 if __name__ == "__main__":
-    #TODO: fix the ref index to non minus (especially when building raw db)
-    for POS in tqdm([1, -3, -2, -1]):
+    is_train = True
+
+    if is_train:
+        poses = [1, -1]
+    else:
+        poses = [1, -3, -2, -1]
+
+    queries_file = "data/queries_bot_modified_sorted.xml"
+    embedding_model_file = "./W2V/models/docFiles_w2v_final"
+    queries = read_queries_file(queries_file)
+    queries = transform_query_text(queries)
+    word_embd_model = gensim.models.KeyedVectors.load_word2vec_format(embedding_model_file, binary=True,
+                                                                      limit=700000)
+
+    # TODO: fix the ref index to non minus (especially when building raw db)
+    for POS in tqdm(poses):
 
         ind_name = {-1: "5", 1: "2", -3: "3", -2: "4"}
-        print("\n\n########################## STARTING POS: " +ind_name[POS] + " ##########################\n\n")
+        ref_to_ind = {-1: 4, -2: 3, -3: 2, 1: 1}
+        print("\n\n########################## STARTING POS: " + ind_name[POS] + " ##########################\n\n")
 
         program = os.path.basename(sys.argv[0])
         logger = logging.getLogger(program)
@@ -508,7 +535,7 @@ if __name__ == "__main__":
         parser.add_option("--mode", dest="mode", default="features")
         # parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/cluewebindex')
         parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/INDEX')
-        parser.add_option("--top_docs_index", dest="top_docs_index", default="3")
+        parser.add_option("--top_docs_index", dest="top_docs_index", default=str(min(3, ref_to_ind[POS])))
         parser.add_option("--home_path", dest="home_path", default="./")
         parser.add_option("--jar_path", dest="jar_path", default="./scripts/RankLib.jar")
         parser.add_option("--java_path", dest="java_path", default="../opt/java/jdk1.8.0")
@@ -519,8 +546,9 @@ if __name__ == "__main__":
         parser.add_option("--model", dest="model", default="./rank_models/model_lambdatamart")
         parser.add_option("--indri_path", dest="indri_path", default="../indri")
         parser.add_option("--doc_tfidf_dir", dest="doc_tfidf_dir", default="./asr_tfidf_vectors/")
-        parser.add_option("--sentences_tfidf_dir", dest="sentences_tfidf_dir", default="./greg_output/sentences_tfidf_dir/")
-        parser.add_option("--queries_file", dest="queries_file", default="data/queries_bot_modified_sorted.xml")
+        parser.add_option("--sentences_tfidf_dir", dest="sentences_tfidf_dir",
+                          default="./greg_output/sentences_tfidf_dir/")
+        # parser.add_option("--queries_file", dest="queries_file", default="data/queries_bot_modified_sorted.xml")
         parser.add_option("--scores_dir", dest="scores_dir", default="./greg_output/scores_dir")
         parser.add_option("--trec_file", dest="trec_file", default="./trecs/trec_file_original_sorted.txt")
         # parser.add_option("--sentence_trec_file", dest="sentence_trec_file") #not used
@@ -530,11 +558,12 @@ if __name__ == "__main__":
                           default="./greg_output/output_final_feature_file_dir")
         parser.add_option("--trectext_file", dest="trectext_file", default="./data/documents.trectext")
         parser.add_option("--new_trectext_file", dest="new_trectext_file")
-        parser.add_option("--embedding_model_file", dest="embedding_model_file",
-                          default="./W2V/models/docFiles_w2v_final")
+        # parser.add_option("--embedding_model_file", dest="embedding_model_file",
+        #                   default="./W2V/models/docFiles_w2v_final")
         # parser.add_option("--embedding_model_file", dest="embedding_model_file",
         #                   default="/lv_local/home/niv.b/content_modification_code-master/embedding_models/GoogleNews-vectors-negative300.bin")
-        parser.add_option("--workingset_file", dest="workingset_file", default=f"./greg_output/saved_result_files/ws_output_{ind_name[POS]}.txt")
+        parser.add_option("--workingset_file", dest="workingset_file",
+                          default=f"./greg_output/saved_result_files/ws_output_{ind_name[POS]}.txt")
         parser.add_option("--svm_model_file", dest="svm_model_file", default="./rank_models/harmonic_competition_model")
         parser.add_option("--raw_ds_out", dest="raw_ds_out",
                           default=f"./greg_output/saved_result_files/raw_ds_out_{ind_name[POS]}.txt")
@@ -559,24 +588,21 @@ if __name__ == "__main__":
         #     create_qrels(options.raw_ds_out, options.trec_file, "qrels_seo_bot" + options.ref_index + ".txt",
         #                  int(options.ref_index), "qrels_indices/", doc_texts, options)
 
-
         if mode == "features":
-            # delete below line when debugging stops
-
             run_bash_command('rm -r ' + options.raw_ds_out)
             if not os.path.exists(options.raw_ds_out):
                 create_raw_dataset(ranked_lists, doc_texts, options.raw_ds_out, int(options.ref_index),
-                                   int(options.top_docs_index))
+                                   int(options.top_docs_index), is_train)
                 create_sentence_vector_files(options.sentences_tfidf_dir, options.raw_ds_out, options.index_path,
                                              options.java_path, options.swig_path, options.home_path)
 
-            if os.path.exists(options.workingset_file): os.remove(options.workingset_file)
-
-            queries = read_queries_file(options.queries_file)
-            queries = transform_query_text(queries)
-            word_embd_model = gensim.models.KeyedVectors.load_word2vec_format(options.embedding_model_file, binary=True,
-                                                                              limit=700000)  #### Modify this line in case you are using other types of embeedings
             feature_creation_parallel(options.raw_ds_out, ranked_lists, doc_texts, int(options.top_docs_index),
                                       int(options.ref_index), options.doc_tfidf_dir,
                                       options.sentences_tfidf_dir, queries, options.output_feature_files_dir,
                                       options.output_final_feature_file_dir, options.workingset_file)
+
+    utils.process_files(
+        '/lv_local/home/niv.b/content_modification_code-master/greg_output/output_final_feature_file_dir',
+        '/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files')
+    if is_train:
+        utils.create_train_data()
