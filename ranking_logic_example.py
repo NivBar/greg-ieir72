@@ -182,6 +182,6 @@ if __name__ == '__main__':
     # pool.map(main_task, current_times)
     # pool.close()
     # pool.join()
-    current_time = "asrc3"
+    current_time = "asrcfull2"
     print(f'Starting version {current_time}...')
     main_task(current_time)

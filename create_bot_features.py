@@ -2,6 +2,8 @@ import logging
 import sys
 from optparse import OptionParser
 import gensim
+from tqdm import tqdm
+
 from gen_utils import run_bash_command, list_multiprocessing
 import os
 from copy import deepcopy
@@ -59,19 +61,25 @@ def create_sentence_pairs(top_docs, ref_doc, texts):
 #                     output.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs[key] + "\n")
 
 def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", ref_index=-1, top_docs_index=3):
+
+    ref_to_ind = {-1:4, -2:3, -3:2, 1:1}
+
     with open(output_file, 'w') as output:
         with open(output_file.replace(".txt","_texts.txt"), 'w') as output_texts:
             for epoch in ranked_lists:
-                if epoch != "07": #TODO: only testing!!!
+                if epoch not in ["06","04"]: #TODO: only train!!!
+                # if epoch not in ["07"]: #TODO: only test!!!
                     continue
                 for query in ranked_lists[epoch]:
-                    top_docs = ranked_lists[epoch][query][:top_docs_index]
+                    top_docs = ranked_lists[epoch][query][:min(top_docs_index,ref_to_ind[ref_index])]
+                    if len(ranked_lists[epoch][query]) > 5:
+                        ranked_lists[epoch][query] = ranked_lists[epoch][query][:5] # my addition, avoid 6 texts
                     ref_doc = ranked_lists[epoch][query][ref_index]
                     pairs, pairs_text = create_sentence_pairs(top_docs, ref_doc, doc_texts)
                     for key in pairs:
                         output.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs[key] + "\n")
                         output_texts.write(str(int(query)) + str(epoch) + "\t" + key + "\t" + pairs_text[key] + "\n")
-                        x = 1
+
 
 
 # def read_raw_ds(raw_dataset):
@@ -200,7 +208,7 @@ def create_features(raw_ds, ranked_lists, doc_texts, top_doc_index, ref_doc_inde
     qid_original, epoch = qid.split("_")
     #TODO: remove debugging
     if epoch in ["06","07"]:
-        x = 1
+        x = -1
     if epoch in ["01"]:
         return
     past_winners = get_past_winners(ranked_lists, epoch, qid_original)
@@ -436,12 +444,12 @@ def create_specifi_ws(qid, ranked_, fname):
 #     return final
 #
 #
-# def create_qrels(raw_ds, base_trec, out_file, ref, new_indices_dir, texts, options):
-#     idx_dict = {-1: 5, -2: 4, -3: 3, -4: 2, -5: 1}
-#     ref_str = str(ref) if ref > 0 else str(idx_dict.get(ref, None))
-#     with open(out_file, 'w') as qrels:
-#         # ranked_lists = read_raw_trec_file(base_trec)
-#         ranked_lists = read_trec_file(base_trec)
+# def create_qrels(raw_ds,base_trec,out_file,ref,new_indices_dir,texts,options):
+#     ind_name = {-1: "5", 1: "2"}
+#     with open(out_file,'w') as qrels:
+#         ranked_lists = read_raw_trec_file(base_trec)
+#         ranked_lists = {inner_key: inner_value[:5] if len(inner_value) >= 5 else inner_value + [None] * (5 - len(inner_value)) for
+#             inner_key, inner_value in ranked_lists.items()}
 #         raw_stats = read_raw_ds(raw_ds)
 #         ws_dir = "tmp_ws/"
 #         if not os.path.exists(ws_dir):
@@ -455,110 +463,120 @@ def create_specifi_ws(qid, ranked_, fname):
 #         scores_dir = "tmp_scores/"
 #         if not os.path.exists(scores_dir):
 #             os.makedirs(scores_dir)
-#         for comp_id in raw_stats:
-#             for pair in raw_stats[comp_id]:
+#         for qid in raw_stats:
+#             epoch,q=reverese_query(qid)
+#
+#             """ Change FOR GENERIC porpuses if needed"""
+#             if epoch not in ["04","06"]:
+#                 continue
+#
+#             for pair in raw_stats[qid]:
 #                 ref_doc = pair.split("$")[0]
 #                 out_index = int(pair.split("_")[1])
-#                 query, epoch = comp_id.split("_")
-#                 ranked_ = ranked_lists[epoch][query]
-#                 query_write = query + str(int(epoch)) + ref_str
-#                 out_ = str(int(custom_split(pair)[1]) + 1)
-#                 in_ = str(int(custom_split(pair)[2]) + 1)
-#                 name = custom_split(pair.split("$")[1])[0] + "_" + in_ + "_" + out_
-#                 fname_pair = pair.replace("$", "_")
-#                 feature_dir = "tmp_features/" + fname_pair + "/"
+#                 epoch, query = reverese_query(qid)
+#                 query_write = query + str(int(epoch)) + ind_name[ref]
+#                 out_ = str(int(pair.split("_")[1]) + 1)
+#                 in_ = str(int(pair.split("_")[2]) + 1)
+#                 name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
+#                 fname_pair = pair.replace("$","_")
+#                 feature_dir = "tmp_features/" +fname_pair+"/"
 #                 if not os.path.exists(feature_dir):
 #                     os.makedirs(feature_dir)
-#                 features_file = "qrels_features/" + fname_pair
-#                 final_trec = run_reranking(new_indices_dir + fname_pair, raw_stats[comp_id][pair]["in"], comp_id,
-#                                            ws_dir + fname_pair, ref_doc, out_index, texts, trectext_dir + fname_pair,
-#                                            ranked_, features_file, feature_dir, trec_dir + fname_pair,
-#                                            scores_dir + fname_pair, options)
+#                 features_file = "qrels_features/"+fname_pair
+#                 final_trec = run_reranking(new_indices_dir+fname_pair,raw_stats[qid][pair]["in"],qid,ws_dir+fname_pair,ref_doc,out_index,texts,trectext_dir+fname_pair,ranked_lists,features_file,feature_dir,trec_dir+fname_pair,scores_dir+fname_pair,options)
 #                 new_lists = read_raw_trec_file(final_trec)
-#                 label = str(max(ranked_lists[epoch][query].index(ref_doc) - new_lists[
-#                     comp_id.replace("0", "").replace("_", "0")].index(ref_doc), 0))
-#                 qrels.write(query_write + " 0 " + name + " " + label + "\n")
+#                 # label = str(max(ranked_lists[qid].index(ref_doc)-new_lists[qid].index(ref_doc),0))
+#                 label = str(max(ranked_lists[qid.replace("_","").lstrip("0")].index(ref_doc) - new_lists[qid.replace("_","").lstrip("0")].index(ref_doc), 0))
+#                 qrels.write(query_write+" 0 "+name+" "+label+"\n")
 
 
 if __name__ == "__main__":
     #TODO: fix the ref index to non minus (especially when building raw db)
-    POS = 1
-    ind_name = {-1: "5", 1: "2", -3: "3", -2: "4"}
+    for POS in tqdm([1, -3, -2, -1]):
 
-    program = os.path.basename(sys.argv[0])
-    logger = logging.getLogger(program)
+        ind_name = {-1: "5", 1: "2", -3: "3", -2: "4"}
+        print("\n\n########################## STARTING POS: " +ind_name[POS] + " ##########################\n\n")
 
-    logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s')
-    logging.root.setLevel(level=logging.INFO)
-    logger.info("running %s" % ' '.join(sys.argv))
-    parser = OptionParser()
+        program = os.path.basename(sys.argv[0])
+        logger = logging.getLogger(program)
 
-    parser.add_option("--mode", dest="mode", default="features")
-    # parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/cluewebindex')
-    parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/INDEX')
+        logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s')
+        logging.root.setLevel(level=logging.INFO)
+        logger.info("running %s" % ' '.join(sys.argv))
+        parser = OptionParser()
 
-    parser.add_option("--raw_ds_out", dest="raw_ds_out", default=f"./greg_output/saved_result_files/raw_ds_out_{ind_name[POS]}.txt")
-    parser.add_option("--ref_index", dest="ref_index",
-                      default=f"{POS}")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
-    parser.add_option("--top_docs_index", dest="top_docs_index", default="3")
-    parser.add_option("--home_path", dest="home_path", default="./")
-    parser.add_option("--jar_path", dest="jar_path", default="./scripts/RankLib.jar")
-    parser.add_option("--java_path", dest="java_path", default="../opt/java/jdk1.8.0")
-    parser.add_option("--swig_path", dest="swig_path", default="../indri-5.6/swig/src/java")  # ???
-    parser.add_option("--stopwords_file", dest="stopwords_file", default="data/stopwords_list")
-    # parser.add_option("--queries_text_file", dest="queries_text_file", default="./data/working_comp_queries.txt")
-    parser.add_option("--scripts_path", dest="scripts_path", default="scripts/")
-    parser.add_option("--model", dest="model", default="./rank_models/model_lambdatamart")
-    parser.add_option("--indri_path", dest="indri_path", default="../indri")
-    parser.add_option("--doc_tfidf_dir", dest="doc_tfidf_dir", default="./asr_tfidf_vectors/")
-    parser.add_option("--sentences_tfidf_dir", dest="sentences_tfidf_dir", default="./greg_output/sentences_tfidf_dir/")
-    parser.add_option("--queries_file", dest="queries_file", default="data/queries_bot_modified_sorted.xml")
-    parser.add_option("--scores_dir", dest="scores_dir", default="./greg_output/scores_dir")
-    parser.add_option("--trec_file", dest="trec_file", default="./trecs/trec_file_original_sorted.txt")
-    # parser.add_option("--sentence_trec_file", dest="sentence_trec_file") #not used
-    parser.add_option("--output_feature_files_dir", dest="output_feature_files_dir",
-                      default="./greg_output/output_feature_files_dir")
-    parser.add_option("--output_final_feature_file_dir", dest="output_final_feature_file_dir",
-                      default="./greg_output/output_final_feature_file_dir")
-    parser.add_option("--trectext_file", dest="trectext_file", default="./data/documents.trectext")
-    parser.add_option("--new_trectext_file", dest="new_trectext_file")
-    parser.add_option("--embedding_model_file", dest="embedding_model_file",
-                      default="./W2V/models/docFiles_w2v_final")
-    parser.add_option("--workingset_file", dest="workingset_file", default=f"./greg_output/saved_result_files/ws_output_{ind_name[POS]}.txt")
-    parser.add_option("--svm_model_file", dest="svm_model_file", default="./rank_models/harmonic_competition_model")
-    (options, args) = parser.parse_args()
+        parser.add_option("--mode", dest="mode", default="features")
+        # parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/cluewebindex')
+        parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/INDEX')
+        parser.add_option("--top_docs_index", dest="top_docs_index", default="3")
+        parser.add_option("--home_path", dest="home_path", default="./")
+        parser.add_option("--jar_path", dest="jar_path", default="./scripts/RankLib.jar")
+        parser.add_option("--java_path", dest="java_path", default="../opt/java/jdk1.8.0")
+        parser.add_option("--swig_path", dest="swig_path", default="../indri-5.6/swig/src/java")  # ???
+        parser.add_option("--stopwords_file", dest="stopwords_file", default="data/stopwords_list")
+        parser.add_option("--queries_text_file", dest="queries_text_file", default="./data/working_comp_queries.txt")
+        parser.add_option("--scripts_path", dest="scripts_path", default="scripts/")
+        parser.add_option("--model", dest="model", default="./rank_models/model_lambdatamart")
+        parser.add_option("--indri_path", dest="indri_path", default="../indri")
+        parser.add_option("--doc_tfidf_dir", dest="doc_tfidf_dir", default="./asr_tfidf_vectors/")
+        parser.add_option("--sentences_tfidf_dir", dest="sentences_tfidf_dir", default="./greg_output/sentences_tfidf_dir/")
+        parser.add_option("--queries_file", dest="queries_file", default="data/queries_bot_modified_sorted.xml")
+        parser.add_option("--scores_dir", dest="scores_dir", default="./greg_output/scores_dir")
+        parser.add_option("--trec_file", dest="trec_file", default="./trecs/trec_file_original_sorted.txt")
+        # parser.add_option("--sentence_trec_file", dest="sentence_trec_file") #not used
+        parser.add_option("--output_feature_files_dir", dest="output_feature_files_dir",
+                          default="./greg_output/output_feature_files_dir")
+        parser.add_option("--output_final_feature_file_dir", dest="output_final_feature_file_dir",
+                          default="./greg_output/output_final_feature_file_dir")
+        parser.add_option("--trectext_file", dest="trectext_file", default="./data/documents.trectext")
+        parser.add_option("--new_trectext_file", dest="new_trectext_file")
+        parser.add_option("--embedding_model_file", dest="embedding_model_file",
+                          default="./W2V/models/docFiles_w2v_final")
+        # parser.add_option("--embedding_model_file", dest="embedding_model_file",
+        #                   default="/lv_local/home/niv.b/content_modification_code-master/embedding_models/GoogleNews-vectors-negative300.bin")
+        parser.add_option("--workingset_file", dest="workingset_file", default=f"./greg_output/saved_result_files/ws_output_{ind_name[POS]}.txt")
+        parser.add_option("--svm_model_file", dest="svm_model_file", default="./rank_models/harmonic_competition_model")
+        parser.add_option("--raw_ds_out", dest="raw_ds_out",
+                          default=f"./greg_output/saved_result_files/raw_ds_out_{ind_name[POS]}.txt")
+        parser.add_option("--ref_index", dest="ref_index",
+                          default=f"{POS}")  # according to initial retrieved list, the index of documents in the list chosen for rank promotion
+        (options, args) = parser.parse_args()
 
-    ranked_lists = read_trec_file(options.trec_file)
-    # doc_texts = load_file(options.trectext_file)
-    doc_texts = parse_with_regex(open(options.trectext_file, 'r').read())
-    mode = options.mode
+        ranked_lists = read_trec_file(options.trec_file)
+        # ranked_lists = {outer_key: {
+        #     inner_key: inner_value[:5] if len(inner_value) >= 5 else inner_value + [None] * (5 - len(inner_value)) for
+        #     inner_key, inner_value in outer_dict.items()} for outer_key, outer_dict in ranked_lists.items()} # make sure only five docs are in each list
 
-    # if mode == "qrels":
-    #     create_raw_dataset(ranked_lists, doc_texts, options.raw_ds_out, int(options.ref_index),
-    #                        int(options.top_docs_index))
-    #     # create_sentence_vector_files(options.sentences_tfidf_dir, options.raw_ds_out, options.index_path,
-    #     #                              options.java_path, options.swig_path, options.home_path)
-    #     create_qrels(options.raw_ds_out, options.trec_file, "qrels_seo_bot" + options.ref_index + ".txt",
-    #                  int(options.ref_index), "qrels_indices/", doc_texts, options)
+        # doc_texts = load_file(options.trectext_file)
+        doc_texts = parse_with_regex(open(options.trectext_file, 'r').read())
+        mode = options.mode
+
+        # if mode == "qrels":
+        #     create_raw_dataset(ranked_lists, doc_texts, options.raw_ds_out, int(options.ref_index),
+        #                        int(options.top_docs_index))
+        #     create_sentence_vector_files(options.sentences_tfidf_dir, options.raw_ds_out, options.index_path,
+        #                                  options.java_path, options.swig_path, options.home_path)
+        #     create_qrels(options.raw_ds_out, options.trec_file, "qrels_seo_bot" + options.ref_index + ".txt",
+        #                  int(options.ref_index), "qrels_indices/", doc_texts, options)
 
 
-    if mode == "features":
-        # delete below line when debugging stops
+        if mode == "features":
+            # delete below line when debugging stops
 
-        run_bash_command('rm -r ' + options.raw_ds_out)
-        if not os.path.exists(options.raw_ds_out):
-            create_raw_dataset(ranked_lists, doc_texts, options.raw_ds_out, int(options.ref_index),
-                               int(options.top_docs_index))
-            create_sentence_vector_files(options.sentences_tfidf_dir, options.raw_ds_out, options.index_path,
-                                         options.java_path, options.swig_path, options.home_path)
+            run_bash_command('rm -r ' + options.raw_ds_out)
+            if not os.path.exists(options.raw_ds_out):
+                create_raw_dataset(ranked_lists, doc_texts, options.raw_ds_out, int(options.ref_index),
+                                   int(options.top_docs_index))
+                create_sentence_vector_files(options.sentences_tfidf_dir, options.raw_ds_out, options.index_path,
+                                             options.java_path, options.swig_path, options.home_path)
 
-        if os.path.exists(options.workingset_file): os.remove(options.workingset_file)
+            if os.path.exists(options.workingset_file): os.remove(options.workingset_file)
 
-        queries = read_queries_file(options.queries_file)
-        queries = transform_query_text(queries)
-        word_embd_model = gensim.models.KeyedVectors.load_word2vec_format(options.embedding_model_file, binary=True,
-                                                                          limit=700000)  #### Modify this line in case you are using other types of embeedings
-        feature_creation_parallel(options.raw_ds_out, ranked_lists, doc_texts, int(options.top_docs_index),
-                                  int(options.ref_index), options.doc_tfidf_dir,
-                                  options.sentences_tfidf_dir, queries, options.output_feature_files_dir,
-                                  options.output_final_feature_file_dir, options.workingset_file)
+            queries = read_queries_file(options.queries_file)
+            queries = transform_query_text(queries)
+            word_embd_model = gensim.models.KeyedVectors.load_word2vec_format(options.embedding_model_file, binary=True,
+                                                                              limit=700000)  #### Modify this line in case you are using other types of embeedings
+            feature_creation_parallel(options.raw_ds_out, ranked_lists, doc_texts, int(options.top_docs_index),
+                                      int(options.ref_index), options.doc_tfidf_dir,
+                                      options.sentences_tfidf_dir, queries, options.output_feature_files_dir,
+                                      options.output_final_feature_file_dir, options.workingset_file)

@@ -60,6 +60,8 @@ def read_trec_file(trec_file):
         for idx, row in df.iterrows():
             doc = row.docno
             epoch = doc.split("-")[1]
+            # if epoch != '07':
+            #     continue
             query = doc.split("-")[2]
             if epoch not in stats:
                 stats[epoch]={}
