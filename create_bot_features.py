@@ -71,7 +71,7 @@ def create_raw_dataset(ranked_lists, doc_texts, output_file="raw_ds_out.txt", re
         with open(output_file.replace(".txt", "_texts.txt"), 'w') as output_texts:
             for epoch in ranked_lists:
                 if is_train:
-                    rel_eps = ["06", "04"] #train!!!
+                    rel_eps = ["06"] #train!!!
                 else:
                     rel_eps = ["07"] #test!!!
                 if epoch not in rel_eps:
@@ -391,11 +391,8 @@ def create_ws(raw_ds, ws_fname, ref):
             s = query_write + " Q0 " + name + " 0 " + str(i) + " pairs_seo\n"
             if type(s) == str:
                 lines.append(s)
-            else:
-                x = 1
     with open(ws_fname, 'w') as ws:
         ws.writelines(lines)
-    x = 1
 
 
 def update_text_doc(text, new_sentence, index):
@@ -416,94 +413,94 @@ def qid_matching(comp_id):
 
 
 #
-# def create_specifi_ws(qid, ranked_, fname):
-#     new_quid = qid_matching(qid)
-#     with open(fname, 'w') as out:
-#         for i, doc in enumerate(ranked_):
-#             out.write(new_quid + " Q0 " + doc + " 0 " + str(i + 1) + " pairs_seo\n")
+def create_specifi_ws(qid, ranked_, fname):
+    new_quid = qid_matching(qid)
+    with open(fname, 'w') as out:
+        for i, doc in enumerate(ranked_):
+            out.write(new_quid + " Q0 " + doc + " 0 " + str(i + 1) + " pairs_seo\n")
 
 
-# def run_reranking(new_index, sentence_in, qid, specific_ws, ref_doc, out_index, texts, new_trectext_name, ranked_,
-#                   new_feature_file, feature_dir, trec_file, score_file, options):
-#     new_text = update_text_doc(texts[ref_doc], sentence_in, out_index)
-#     create_new_trectext(ref_doc, texts, new_text, new_trectext_name)
-#     create_specifi_ws(qid, ranked_, specific_ws)
-#     logger.info("creating features")
-#     create_index(new_trectext_name, os.path.dirname(new_index), os.path.basename(new_index),
-#                  options.home_path, options.indri_path)
-#     features_file = create_features_file_diff(feature_dir, options.index_path, new_index,
-#                                               new_feature_file, specific_ws, options.scripts_path, options.java_path,
-#                                               options.swig_path, options.stopwords_file, options.queries_text_file,
-#                                               options.home_path)
-#     logger.info("creating docname index")
-#     docname_index = create_index_to_doc_name_dict(features_file)
-#     query_index = create_index_to_query_dict(features_file)
-#     logger.info("docname index creation is completed")
-#     logger.info("features creation completed")
-#     logger.info("running ranking model on features file")
-#     score_file = run_model(features_file, options.home_path, options.java_path, options.jar_path, score_file,
-#                            options.model)
-#     logger.info("ranking completed")
-#     logger.info("retrieving scores")
-#     scores = retrieve_scores(docname_index, query_index, score_file)
-#     logger.info("scores retrieval completed")
-#     logger.info("creating trec_eval file")
-#     tmp_trec = create_trec_eval_file(scores, trec_file)
-#     logger.info("trec file creation is completed")
-#     logger.info("ordering trec file")
-#     final = order_trec_file(tmp_trec)
-#     logger.info("ranking procedure completed")
-#     return final
+def run_reranking(new_index, sentence_in, qid, specific_ws, ref_doc, out_index, texts, new_trectext_name, ranked_,
+                  new_feature_file, feature_dir, trec_file, score_file, options):
+    new_text = update_text_doc(texts[ref_doc], sentence_in, out_index)
+    create_new_trectext(ref_doc, texts, new_text, new_trectext_name)
+    create_specifi_ws(qid, ranked_, specific_ws)
+    logger.info("creating features")
+    create_index(new_trectext_name, os.path.dirname(new_index), os.path.basename(new_index),
+                 options.home_path, options.indri_path)
+    features_file = create_features_file_diff(feature_dir, options.index_path, new_index,
+                                              new_feature_file, specific_ws, options.scripts_path, options.java_path,
+                                              options.swig_path, options.stopwords_file, options.queries_text_file,
+                                              options.home_path)
+    logger.info("creating docname index")
+    docname_index = create_index_to_doc_name_dict(features_file)
+    query_index = create_index_to_query_dict(features_file)
+    logger.info("docname index creation is completed")
+    logger.info("features creation completed")
+    logger.info("running ranking model on features file")
+    score_file = run_model(features_file, options.home_path, options.java_path, options.jar_path, score_file,
+                           options.model)
+    logger.info("ranking completed")
+    logger.info("retrieving scores")
+    scores = retrieve_scores(docname_index, query_index, score_file)
+    logger.info("scores retrieval completed")
+    logger.info("creating trec_eval file")
+    tmp_trec = create_trec_eval_file(scores, trec_file)
+    logger.info("trec file creation is completed")
+    logger.info("ordering trec file")
+    final = order_trec_file(tmp_trec)
+    logger.info("ranking procedure completed")
+    return final
 #
 #
-# def create_qrels(raw_ds,base_trec,out_file,ref,new_indices_dir,texts,options):
-#     ind_name = {-1: "5", 1: "2"}
-#     with open(out_file,'w') as qrels:
-#         ranked_lists = read_raw_trec_file(base_trec)
-#         ranked_lists = {inner_key: inner_value[:5] if len(inner_value) >= 5 else inner_value + [None] * (5 - len(inner_value)) for
-#             inner_key, inner_value in ranked_lists.items()}
-#         raw_stats = read_raw_ds(raw_ds)
-#         ws_dir = "tmp_ws/"
-#         if not os.path.exists(ws_dir):
-#             os.makedirs(ws_dir)
-#         trectext_dir = "tmp_trectext/"
-#         if not os.path.exists(trectext_dir):
-#             os.makedirs(trectext_dir)
-#         trec_dir = "tmp_trec/"
-#         if not os.path.exists(trec_dir):
-#             os.makedirs(trec_dir)
-#         scores_dir = "tmp_scores/"
-#         if not os.path.exists(scores_dir):
-#             os.makedirs(scores_dir)
-#         for qid in raw_stats:
-#             epoch,q=reverese_query(qid)
-#
-#             """ Change FOR GENERIC porpuses if needed"""
-#             if epoch not in ["04","06"]:
-#                 continue
-#
-#             for pair in raw_stats[qid]:
-#                 ref_doc = pair.split("$")[0]
-#                 out_index = int(pair.split("_")[1])
-#                 epoch, query = reverese_query(qid)
-#                 query_write = query + str(int(epoch)) + ind_name[ref]
-#                 out_ = str(int(pair.split("_")[1]) + 1)
-#                 in_ = str(int(pair.split("_")[2]) + 1)
-#                 name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
-#                 fname_pair = pair.replace("$","_")
-#                 feature_dir = "tmp_features/" +fname_pair+"/"
-#                 if not os.path.exists(feature_dir):
-#                     os.makedirs(feature_dir)
-#                 features_file = "qrels_features/"+fname_pair
-#                 final_trec = run_reranking(new_indices_dir+fname_pair,raw_stats[qid][pair]["in"],qid,ws_dir+fname_pair,ref_doc,out_index,texts,trectext_dir+fname_pair,ranked_lists,features_file,feature_dir,trec_dir+fname_pair,scores_dir+fname_pair,options)
-#                 new_lists = read_raw_trec_file(final_trec)
-#                 # label = str(max(ranked_lists[qid].index(ref_doc)-new_lists[qid].index(ref_doc),0))
-#                 label = str(max(ranked_lists[qid.replace("_","").lstrip("0")].index(ref_doc) - new_lists[qid.replace("_","").lstrip("0")].index(ref_doc), 0))
-#                 qrels.write(query_write+" 0 "+name+" "+label+"\n")
+def create_qrels(raw_ds,base_trec,out_file,ref,new_indices_dir,texts,options): #TODO: changed by me!!!
+    ind_name = {-1: "5", 1: "2"}
+    with open(out_file,'w') as qrels:
+        ranked_lists = read_raw_trec_file(base_trec)
+        ranked_lists = {inner_key: inner_value[:5] if len(inner_value) >= 5 else inner_value + [None] * (5 - len(inner_value)) for
+            inner_key, inner_value in ranked_lists.items()}
+        raw_stats = read_raw_ds(raw_ds)
+        ws_dir = "tmp_ws/"
+        if not os.path.exists(ws_dir):
+            os.makedirs(ws_dir)
+        trectext_dir = "tmp_trectext/"
+        if not os.path.exists(trectext_dir):
+            os.makedirs(trectext_dir)
+        trec_dir = "tmp_trec/"
+        if not os.path.exists(trec_dir):
+            os.makedirs(trec_dir)
+        scores_dir = "tmp_scores/"
+        if not os.path.exists(scores_dir):
+            os.makedirs(scores_dir)
+        for qid in raw_stats:
+            epoch,q=reverese_query(qid)
+
+            """ Change FOR GENERIC porpuses if needed"""
+            if epoch not in ["04","06"]:
+                continue
+
+            for pair in raw_stats[qid]:
+                ref_doc = pair.split("$")[0]
+                out_index = int(pair.split("_")[1])
+                epoch, query = reverese_query(qid)
+                query_write = query + str(int(epoch)) + ind_name[ref]
+                out_ = str(int(pair.split("_")[1]))
+                in_ = str(int(pair.split("_")[2]))
+                name = pair.split("$")[1].split("_")[0] + "_" + in_ + "_" + out_
+                fname_pair = pair.replace("$","_")
+                feature_dir = "tmp_features/" +fname_pair+"/"
+                if not os.path.exists(feature_dir):
+                    os.makedirs(feature_dir)
+                features_file = "qrels_features/"+fname_pair
+                final_trec = run_reranking(new_indices_dir+fname_pair,raw_stats[qid][pair]["in"],qid,ws_dir+fname_pair,ref_doc,out_index,texts,trectext_dir+fname_pair,ranked_lists,features_file,feature_dir,trec_dir+fname_pair,scores_dir+fname_pair,options)
+                new_lists = read_raw_trec_file(final_trec)
+                # label = str(max(ranked_lists[qid].index(ref_doc)-new_lists[qid].index(ref_doc),0))
+                label = str(max(ranked_lists[qid.replace("_","").lstrip("0")].index(ref_doc) - new_lists[qid.replace("_","").lstrip("0")].index(ref_doc), 0))
+                qrels.write(query_write+" 0 "+name+" "+label+"\n")
 
 
 if __name__ == "__main__":
-    is_train = True
+    is_train = False
 
     if is_train:
         poses = [1, -1]
@@ -511,7 +508,7 @@ if __name__ == "__main__":
         poses = [1, -3, -2, -1]
 
     queries_file = "data/queries_bot_modified_sorted.xml"
-    embedding_model_file = "./W2V/models/docFiles_w2v_final"
+    embedding_model_file = "/lv_local/home/niv.b/content_modification_code-master/embedding_models/GoogleNews-vectors-negative300.bin"
     queries = read_queries_file(queries_file)
     queries = transform_query_text(queries)
     word_embd_model = gensim.models.KeyedVectors.load_word2vec_format(embedding_model_file, binary=True,
@@ -532,7 +529,7 @@ if __name__ == "__main__":
         logger.info("running %s" % ' '.join(sys.argv))
         parser = OptionParser()
 
-        parser.add_option("--mode", dest="mode", default="features")
+        parser.add_option("--mode", dest="mode", default="qrels")
         # parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/cluewebindex')
         parser.add_option("--index_path", dest="index_path", default='/lv_local/home/niv.b/INDEX')
         parser.add_option("--top_docs_index", dest="top_docs_index", default=str(min(3, ref_to_ind[POS])))
@@ -580,13 +577,13 @@ if __name__ == "__main__":
         doc_texts = parse_with_regex(open(options.trectext_file, 'r').read())
         mode = options.mode
 
-        # if mode == "qrels":
-        #     create_raw_dataset(ranked_lists, doc_texts, options.raw_ds_out, int(options.ref_index),
-        #                        int(options.top_docs_index))
-        #     create_sentence_vector_files(options.sentences_tfidf_dir, options.raw_ds_out, options.index_path,
-        #                                  options.java_path, options.swig_path, options.home_path)
-        #     create_qrels(options.raw_ds_out, options.trec_file, "qrels_seo_bot" + options.ref_index + ".txt",
-        #                  int(options.ref_index), "qrels_indices/", doc_texts, options)
+        if mode == "qrels":
+            create_raw_dataset(ranked_lists, doc_texts, options.raw_ds_out, int(options.ref_index),
+                               int(options.top_docs_index))
+            create_sentence_vector_files(options.sentences_tfidf_dir, options.raw_ds_out, options.index_path,
+                                         options.java_path, options.swig_path, options.home_path)
+            create_qrels(options.raw_ds_out, options.trec_file, "qrels_seo_bot" + options.ref_index + ".txt",
+                         int(options.ref_index), "qrels_indices/", doc_texts, options)
 
         if mode == "features":
             run_bash_command('rm -r ' + options.raw_ds_out)

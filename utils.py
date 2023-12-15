@@ -5,6 +5,30 @@ from gen_utils import run_bash_command, run_command
 import xml.etree.ElementTree as ET
 from lxml import etree
 import re
+import stat
+
+def check_and_update_permissions(path):
+    # Check if file exists
+    exists = os.path.exists(path)
+    if not exists:
+        print(f"File {path} does not exist.")
+        return
+
+    # Check current permissions and update if necessary
+    current_permissions = stat.S_IMODE(os.lstat(path).st_mode)
+    read_permission = bool(current_permissions & stat.S_IRUSR)
+    write_permission = bool(current_permissions & stat.S_IWUSR)
+    execute_permission = bool(current_permissions & stat.S_IXUSR)
+
+    # print(f"Current permissions for {path}: Read: {read_permission}, Write: {write_permission}, Execute: {execute_permission}")
+
+    # Grant all permissions (read, write, execute) if not present
+    if not (read_permission and write_permission and execute_permission):
+        os.chmod(path, current_permissions | stat.S_IRWXU)
+        print(f"Updated permissions for {path} to read, write, and execute.")
+    else:
+        pass
+
 
 
 def process_files(source_dir, target_dir):

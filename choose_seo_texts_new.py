@@ -94,6 +94,13 @@ def generate_output_file_matching_perl(output_file_path, normalized_features, fe
 
 
 if __name__ == '__main__':
+
+    greg_df = pd.read_csv("/lv_local/home/niv.b/CharPDM/greg_data.csv")
+    greg_df = greg_df[greg_df.round_no == 7]
+
+    archive_dir = "archive_test_w2v"
+    model_dir = "/lv_local/home/niv.b/train_RankSVM/feature_sets"
+
     features_dir = '/lv_local/home/niv.b/content_modification_code-master/greg_output/output_feature_files_dir'
     feature_list = ["FractionOfQueryWordsIn", "FractionOfQueryWordsOut", "CosineToCentroidIn", "CosineToCentroidInVec",
                     "CosineToCentroidOut", "CosineToCentroidOutVec", "CosineToWinnerCentroidInVec",
@@ -104,25 +111,24 @@ if __name__ == '__main__':
 
     # create_train_data()
 
-    file_to_nick = {"demotion_model": "D", "harmonic_model_2": "H2", "harmonic_model_1000": "H1E3",
-                    "harmonic_model_0": "H0", "harmonic_model_100000": "H1E5"
-        , "harmonic_model_1000000000": "H1E9", "harmonic_model_1": "H1", "harmonic_model_0.5": "H05",
-                    "weighted_model_0.5": "W05", "weighted_model_0.7": "W07",
-                    "weighted_model_0": "W0", "weighted_model_0.9": "W09", "weighted_model_0.6": "W06",
-                    "weighted_model_1": "W1", "weighted_model_0.3": "W03",
-                    "weighted_model_0.1": "W01", "weighted_model_0.4": "W04", "weighted_model_0.8": "W08",
-                    "weighted_model_0.2": "W02"}
+    # file_to_nick = {"demotion_model": "D", "harmonic_model_2": "H2", "harmonic_model_1000": "H1E3",
+    #                 "harmonic_model_0": "H0", "harmonic_model_100000": "H1E5"
+    #     , "harmonic_model_1000000000": "H1E9", "harmonic_model_1": "H1", "harmonic_model_0.5": "H05",
+    #                 "weighted_model_0.5": "W05", "weighted_model_0.7": "W07",
+    #                 "weighted_model_0": "W0", "weighted_model_0.9": "W09", "weighted_model_0.6": "W06",
+    #                 "weighted_model_1": "W1", "weighted_model_0.3": "W03",
+    #                 "weighted_model_0.1": "W01", "weighted_model_0.4": "W04", "weighted_model_0.8": "W08",
+    #                 "weighted_model_0.2": "W02", "harmonic_competition_model": "G"}
 
-    file_to_nick = {}
-
-    nick_to_file = {v: k for k, v in file_to_nick.items()}
+    file_to_nick = {k:k.split("_")[-1] for k in os.listdir(model_dir) if "model" in k}
 
     for model in file_to_nick.keys():
-        nick = file_to_nick[model]
-        for pos in ["2", "3", "4", "5"]:
-            print(f"\n\n########## model: {model}, pos: {pos} ##########\n\n")
+        print(f"\n\n########## model: {model} ##########\n\n")
 
-            working_set_file_path = f'/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/ws_output_{pos}.txt'
+        nick = file_to_nick[model]
+        for pos in tqdm(["2", "3", "4", "5"]):
+
+            working_set_file_path = f'/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/{archive_dir}/ws_output_{pos}.txt'
 
             # output_file_path = f'/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/test_{pos}_new.dat'
             # init_docs = read_working_set_file(working_set_file_path)
@@ -135,12 +141,15 @@ if __name__ == '__main__':
             #                        f"/lv_local/home/niv.b/content_modification_code-master/rank_models/harmonic_competition_model "
             #                        f"/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/predictions_{pos}.txt")
 
-            command = f"/lv_local/home/niv.b/svm_rank/svm_rank_classify /lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/archive_test_google/features_{pos}.dat /lv_local/home/niv.b/content_modification_code-master/rank_models/{model} /lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/predictions_{nick}_{pos}.txt"
+            command = f"/lv_local/home/niv.b/svm_rank/svm_rank_classify " \
+                      f"/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/{archive_dir}/features_{pos}.dat " \
+                      f"{model_dir}/{model} " \
+                      f"/lv_local/home/niv.b/content_modification_code-master/greg_output/saved_result_files/predictions_{nick}_{pos}.txt"
             out = run_bash_command(command)
 
-            print(out)
+            # print(out)
             text_df = pd.DataFrame([line.strip().split(None, 2) for line in
-                                    open(f'./greg_output/saved_result_files/raw_ds_out_{pos}_texts.txt')],
+                                    open(f'./greg_output/saved_result_files/{archive_dir}/raw_ds_out_{pos}_texts.txt')],
                                    columns=['index_', 'ID', 'text'])
             text_df[['ref', 'docid']] = text_df['ID'].str.split('$', n=1, expand=True)
             text_df["creator"] = text_df["ref"].str.split("-", expand=True)[3].astype(int)
@@ -160,13 +169,13 @@ if __name__ == '__main__':
             final_df["username"] = "BOT_" + nick
             final_df = final_df[["round_no", "query_id", "creator", "username", "text"]]
             final_df["round_no"] = final_df["round_no"].str.replace("0", "")
+
             final_df.to_csv(f"./greg_output/saved_result_files/bot_followup_asrc_{nick}_{pos}.csv", index=False)
+            # print("created bot followup file for position: ", pos, "\n")
 
-            print("created bot followup file for position: ", pos, "\n")
+    df = pd.concat(
+        [pd.read_csv(file) for file in glob.glob("./greg_output/saved_result_files/bot_followup_asrc_*.csv")],
+        ignore_index=True).sort_values(["round_no", "query_id", "creator"])
 
-        # # concat rounds 2-5
-        df = pd.concat(
-            [pd.read_csv(file) for file in glob.glob("./greg_output/saved_result_files/bot_followup_asrc_*.csv")],
-            ignore_index=True).sort_values(["round_no", "query_id", "creator"])
-
-        df.to_csv("./greg_output/saved_result_files/bot_followup_asrc.csv", index=False)
+    df.to_csv("./greg_output/saved_result_files/bot_followup_asrc.csv", index=False)
+    print("\n\n########## created bot followup file for all models and positions ##########\n\n")

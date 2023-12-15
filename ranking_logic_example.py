@@ -2,7 +2,6 @@ import os
 import subprocess
 import time
 import logging.handlers
-
 # import multiprocessing
 
 
@@ -101,11 +100,23 @@ def run_ranking_model(mergedIndex, workingSet, currentTime, baseDir):
     if not os.path.exists(FEATURES_DIR):
         os.makedirs(FEATURES_DIR)
     FEATURES_FILE = 'features'
-    command = baseDir + 'scripts/LTRFeatures ' + QUERIES_FILE + ' -stream=doc -index=' + INDEX + ' -repository=' + INDEX + ' -useWorkingSet=true -workingSetFile=' + WORKING_SET_FILE + ' -workingSetFormat=trec'
-    print(command)
-    out = run_bash_command(command)
-    print(out)
-    out = run_command('mv doc*_* ' + FEATURES_DIR)
+
+    if not os.listdir(FEATURES_DIR):
+
+        command = baseDir + 'scripts/LTRFeatures ' + QUERIES_FILE + ' -stream=doc -index=' + INDEX + ' -repository=' + INDEX + ' -useWorkingSet=true -workingSetFile=' + WORKING_SET_FILE + ' -workingSetFormat=trec'
+        print(command)
+        out = run_bash_command(command)
+        print(out)
+        out = run_command('mv doc*_* ' + FEATURES_DIR)
+        print(out)
+
+        if any(file.startswith("doc") for file in os.listdir('/lv_local/home/niv.b/content_modification_code-master')):
+            command = f"find /lv_local/home/niv.b/content_modification_code-master -maxdepth 1 -name 'doc*' -exec mv {{}} /lv_local/home/niv.b/content_modification_code-master/Results/Features/{currentTime}/ \\;"
+            output = run_bash_command(command)
+            print(output.decode('utf-8'))
+        else:
+            print("No files starting with 'doc' found in the specified directory.")
+
     command = 'perl ' + baseDir + 'scripts/generate.pl ' + FEATURES_DIR + ' ' + WORKING_SET_FILE
     print(command)
     out = run_bash_command(command)
@@ -153,7 +164,7 @@ def main_task(currentTime):
     baseDir = '/lv_local/home/niv.b/content_modification_code-master/'
     documents = f'/lv_local/home/niv.b/content_modification_code-master/trecs/bot_followup_{currentTime}.trectext'
     workingSet = f'/lv_local/home/niv.b/content_modification_code-master/trecs/working_set_{currentTime}.trectext'
-
+   
     # asrIndex = build_index(documents, currentTime, baseDir)
     # print("build_index done...")
     # logger.info("build_index done...")
@@ -161,6 +172,7 @@ def main_task(currentTime):
     # mergedIndex = merge_indices(asrIndex, baseDir, currentTime)
     # print("merge_indices done...")
     # logger.info("merge_indices done...")
+    # time.sleep(10)
 
     mergedIndex = baseDir + 'Collections/' + f'/mergedindex_{currentTime}' # in case of running only the ranking model
     res = run_ranking_model(mergedIndex, workingSet, currentTime, baseDir)
@@ -182,6 +194,7 @@ if __name__ == '__main__':
     # pool.map(main_task, current_times)
     # pool.close()
     # pool.join()
-    current_time = "asrcfull2"
+    current_time = "llama13btrain"
     print(f'Starting version {current_time}...')
+    logger.info(f'Starting version {current_time}...')
     main_task(current_time)
